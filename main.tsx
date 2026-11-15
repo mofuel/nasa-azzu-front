@@ -138,7 +138,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     controls.maxDistance = 8
     controls.enableDamping = false
     controls.rotateSpeed = .65
-    controls.autoRotateSpeed = .20
+    controls.autoRotateSpeed = -.20
     const ambient = new THREE.AmbientLight(0xaac8ff, .85)
     scene.add(ambient)
     const sun = new THREE.DirectionalLight(0xffecd4, 2.5)
