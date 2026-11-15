@@ -5,3 +5,6 @@ dist/
 .env.*
 !.env.example
 .material-local/
+
+test-results/
+playwright-report/
