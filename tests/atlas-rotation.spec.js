@@ -4,6 +4,8 @@ import {test, expect} from '@playwright/test';
 const atlasURL = process.env.ATLAS_URL || '/';
 
 async function openAtlas(page, reducedMotion = 'no-preference') {
+  // UI fixtures do not depend on downloads from the satellite provider.
+  await page.route('**/tiles.maps.eox.at/**', route => route.abort());
   await page.emulateMedia({reducedMotion});
   // Observe the rendered camera in the browser without modifying application files.
   await page.route('**/main.tsx*', async route => {
@@ -18,7 +20,12 @@ async function openAtlas(page, reducedMotion = 'no-preference') {
   });
   await page.goto(atlasURL);
   const skip = page.getByRole('button', {name: 'Saltar introducción'});
-  if (await skip.isVisible()) await skip.click();
+  if (await skip.isVisible()) {
+    await skip.click({timeout: 1500}).catch(async error => {
+      // The introduction may finish naturally between checking and clicking.
+      if (!await page.locator('.console-frame').isVisible()) throw error;
+    });
+  }
   await expect(page.getByRole('heading', {name: 'Análogos terrestres'})).toBeVisible();
   await expect(page.locator('.console-frame')).toBeVisible();
   await page.waitForFunction(() => window.__atlasProbe);
