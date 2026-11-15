@@ -19,6 +19,12 @@ de variable, Tierra, referencia, diferencia y ubicación. Las tarjetas numérica
 cuando hay mediciones; no se rellenan con cifras de muestra. El globo continúa detrás de los
 paneles de cristal en escritorio; en móvil los apartados se apilan para mantener la lectura.
 
+El panel de actividad consulta `/api/search/status` cada 30 segundos y distingue procesamiento,
+espera y ausencia de señal reciente. Muestra la cola, el último avance y los meses MODIS;
+no interpreta un contenedor encendido como búsqueda activa ni promete un dominio infinito.
+El contexto NASA tiene un apartado propio con NDVI/LST, unidades, meses válidos y límites,
+incluidos los valores sin dato, sin inventar una comparación térmica planetaria.
+
 ## Desarrollo local
 
 Requiere Node.js 20.19+ o 22.12+.
@@ -71,9 +77,9 @@ Con las dependencias instaladas, ejecuta:
 
 También se pueden ejecutar `bun run build` y `bun run test` con las dependencias instaladas.
 
-Playwright inicia Vite y ejecuta 16 comprobaciones, repartidas entre escritorio y móvil:
+Playwright inicia Vite y ejecuta 20 comprobaciones, repartidas entre escritorio y móvil:
 giro y arrastre, movimiento reducido, centrado y zoom repetible, selección de variables,
-leyendas, cambio de referencia, resultados sin datos, errores y reintentos.
+leyendas, cambio de referencia, resultados sin datos, errores y reintentos, actividad y contexto NASA.
 Las mediciones de las pruebas son fixtures interceptadas, no resultados científicos.
 
 ## Imágenes satelitales del globo

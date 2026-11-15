@@ -94,6 +94,12 @@ function completed(body) {
 async function mockApi(page, options = {}) {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/search/status')) return route.fulfill({json: options.searchState ?? {
+      celdas: {hecha: 27, pendiente: 5, en_curso: 1}, teselas: 58978, teselas_candidatas: 32,
+      ultima_actualizacion: '2026-11-15T23:00:00Z',
+      trabajadores: [{estado: 'procesando', celda_id: 'N25E039', senal_reciente: true, actualizado_utc: '2026-11-15T23:00:00Z', celdas_elegibles: 4145}],
+      contexto_nasa: {meses: ['2025-01', '2025-07'], version_qa: 'modis-qa-v2', umbral_ndvi: .3}
+    }});
     if (path.endsWith('/sites')) {
       return route.fulfill({json: sites});
     }
@@ -216,4 +222,43 @@ test('an unavailable catalog does not silently show demo locations', async ({pag
   await page.getByRole('button', {name: 'Reintentar catálogo'}).click();
   await expect(page.getByRole('button', {name: 'Cinder Lake', exact: true})).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('search activity distinguishes real processing from a stale signal', async ({page}) => {
+  await mockApi(page);
+  await openAtlas(page, 'reduce');
+  const activity = page.getByRole('region', {name: 'Estado de la búsqueda'});
+  await expect(activity).toContainText('Analizando terreno');
+  await expect(activity).toContainText('5 en cola');
+  await activity.getByText('Actividad y datos NASA', {exact: true}).click();
+  await expect(activity).toContainText('no son lugares únicos');
+  await expect(activity).toContainText('no promete descubrimientos infinitos');
+  await page.route('**/api/search/status', route => route.fulfill({json: {
+    celdas: {hecha: 27}, teselas: 58978, teselas_candidatas: 0, ultima_actualizacion: null,
+    trabajadores: [{estado: 'procesando', celda_id: 'N25E039', senal_reciente: false, actualizado_utc: '2026-11-15T21:00:00Z', celdas_elegibles: 4145}],
+    contexto_nasa: null
+  }}));
+  await page.reload();
+  await expect(activity).toContainText('Sin señal reciente del trabajador');
+  await expect(activity.locator('.activity-dot.active')).toHaveCount(0);
+});
+
+test('NASA context has its own units, missing data and explicit limits', async ({page}) => {
+  await mockApi(page, {analysis: body => ({json: {
+    ...completed(body), result: {...completed(body).result, earthContext: {
+      months: ['2025-01', '2025-07'], resolutionDegrees: .05,
+      ndviMax: null, ndviValidMonths: 0, lstDayMaxK: 310.2, lstDayValidMonths: 2,
+      lstNightMinK: null, lstNightValidMonths: 0, ndviThreshold: .3, passesNdviScreen: false
+    }}
+  }})});
+  await openAtlas(page, 'reduce');
+  await page.getByRole('button', {name: 'Cinder Lake', exact: true}).click();
+  await page.getByRole('button', {name: 'Ver comparación', exact: true}).click();
+  await page.getByText('Contexto NASA terrestre · vegetación y temperatura', {exact: true}).click();
+  const context = page.locator('.nasa-context');
+  await expect(context).toContainText('310,2 K');
+  await expect(context.getByText('Sin dato válido', {exact: true})).toHaveCount(2);
+  await expect(context).toContainText('No cumple el filtro o faltan meses válidos');
+  await expect(context).toContainText('no son extremos anuales');
+  await expect(context).toContainText('no NASA');
 });
