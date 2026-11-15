@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import gsap from 'gsap'
 import './style.css'
+import { satelliteLayer } from './satellite-layer'
 
 type Site = { id: string; name: string; lat: number; lon: number; coverage: string }
 type Comparison = { id: string; label: string; variable: string; reference: string }
@@ -133,7 +134,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     controls.enabled = false
     controls.enablePan = false
     controls.enableZoom = true
-    controls.minDistance = 1.3
+    controls.minDistance = 1.0001
     controls.maxDistance = 8
     controls.enableDamping = false
     controls.rotateSpeed = .65
@@ -194,6 +195,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     }
     const earth = new THREE.Mesh(geometry, material)
     scene.add(earth)
+    const satellite = satelliteLayer(scene, camera, renderer)
     const halo = new THREE.ShaderMaterial({
       side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: { strength: { value: .67 }, atlasLighting: surface },
@@ -467,14 +469,18 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     }
     let frame = 0
     let previousFrame = performance.now()
+    const paint = () => {
+      satellite.update(cinematic ? THREE.MathUtils.smoothstep(intro.time(), 4.4, INTRO_END) : 1, sun, ambient.intensity)
+      updatePins()
+      renderer.render(scene, camera)
+    }
     const render = () => {
       const now = performance.now()
       const delta = Math.min((now - previousFrame) / 1000, .05)
       previousFrame = now
       if (cinematic) drawShot()
       controls.update(delta)
-      updatePins()
-      renderer.render(scene, camera)
+      paint()
       frame = requestAnimationFrame(render)
     }
     render()
@@ -493,6 +499,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       controls.removeEventListener('start', interrupt)
       controls.dispose()
       for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat, selectedPinMat]) asset.dispose()
+      satellite.dispose()
       renderer.dispose()
       canvas.remove()
     }
@@ -508,6 +515,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       <button onClick={() => overview.current?.()}>Vista global</button>
       {selected && <button onClick={() => focus.current?.(selected)}>Volver al lugar</button>}
     </div>}
+    {!unavailable && <a key={opening ? "intro-credit" : "map-credit"} className="imagery-credit" href="https://maps.eox.at/" target="_blank" rel="noreferrer">Sentinel-2 2016 · EOX · Copernicus · CC BY 4.0</a>}
     {unavailable && <p className="map-unavailable" role="status">No se pudo cargar el globo. Puedes consultar los lugares y sus datos en la lista.</p>}
     {opening && <>
       <div className="orbital-haze" />
@@ -759,7 +767,7 @@ function App() {
             <div className="map-legend" aria-label="Leyenda del mapa">
               <span><i className="earth-swatch" aria-hidden="true" /> Lugar del catálogo</span>
               <span><i className="selected-swatch" aria-hidden="true" /> Tu selección</span>
-              <small>Vista global, no imagen de detalle del terreno.</small>
+              <small>Detalle satelital progresivo al acercarse.</small>
             </div>
           </>}
         </div>

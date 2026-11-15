@@ -75,3 +75,20 @@ Playwright inicia Vite y ejecuta 16 comprobaciones, repartidas entre escritorio 
 giro y arrastre, movimiento reducido, centrado y zoom repetible, selección de variables,
 leyendas, cambio de referencia, resultados sin datos, errores y reintentos.
 Las mediciones de las pruebas son fixtures interceptadas, no resultados científicos.
+
+## Imágenes satelitales del globo
+
+La vista global y el zoom usan el mosaico original Sentinel-2 cloudless 2016 de EOX,
+capa WMTS s2cloudless_3857, con datos Copernicus Sentinel modificados de 2016.
+Licencia de las imágenes: Creative Commons Attribution 4.0 International (CC BY 4.0).
+No representa imágenes actuales. La resolución original de hasta 10 m limita el detalle
+del acercamiento; el zoom no genera detalle adicional. Requiere conexión al servicio EOX.
+
+Atribución: EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH
+(Contains modified Copernicus Sentinel data 2016).
+En Tzumy las imágenes se reproyectan sobre una esfera y reciben iluminación visual
+durante la introducción. Son un fondo de visualización; no sustituyen los datos de análisis.
+
+- Servicio y licencia por capa: https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml
+- Licencia: https://creativecommons.org/licenses/by/4.0/
+- Información del mosaico: https://www.eox.at/2025/03/sentinel-2-cloudless-2024/
