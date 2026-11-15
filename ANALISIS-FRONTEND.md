@@ -1,4 +1,4 @@
-# TSUMI · Análisis y propuesta de frontend
+# TZUMY · Análisis y propuesta de frontend
 
 ## Estado actual de la interfaz
 
@@ -44,7 +44,7 @@ Fuentes: https://github.com/77ALDO77/tsumi_nasa_SA/blob/main/CONTEXTO_RETO.md y 
 
 ## Réplica visual de Kestrel · orden de trabajo
 
-Fuselab utiliza un globo Mapbox/WebGL y describe una secuencia procedural por tiempo. React, Vite y GSAP son elecciones de TSUMI. El objetivo es una consola geoespacial a pantalla completa. El mismo mapa permanece montado mientras entra la interfaz y se habilita el control manual.
+Fuselab utiliza un globo Mapbox/WebGL y describe una secuencia procedural por tiempo. React, Vite y GSAP son elecciones de TZUMY. El objetivo es una consola geoespacial a pantalla completa. El mismo mapa permanece montado mientras entra la interfaz y se habilita el control manual.
 
 | Orden | Referencia | Subtarea y criterio visual |
 |---|---|---|
@@ -52,9 +52,9 @@ Fuselab utiliza un globo Mapbox/WebGL y describe una secuencia procedural por ti
 | 2 | F0241–F0373 (4–6,2 s) | Giro, reencuadre y marcadores. Comparar escala y orientación. Usar capa geográfica de Mapbox. Validar que los puntos acompañen la cámara y desaparezcan al quedar ocluidos. |
 | 3 | F0373–F0505 (6,2–8,4 s) | Trazar el perímetro, revelar divisiones y mostrar la lista con entradas escalonadas. SVG, CSS y GSAP. La interfaz se superpone al mismo mapa. |
 | 4 | F0505–F0649 (8,4–10,8 s) | Revelar tarjetas y gráfico inferior. Replicar orden, opacidad y barrido de izquierda a derecha con máscara SVG o CSS. |
-| 5 | F0649–F0871 (10,8–14,5 s) | Consola operativa. El clip mantiene el giro lento. TSUMI entrega el control al usuario al entrar en este estado. Se puede arrastrar, seleccionar un punto y consultar su ficha desde el mapa y la lista. |
+| 5 | F0649–F0871 (10,8–14,5 s) | Consola operativa. El clip mantiene el giro lento. TZUMY entrega el control al usuario al entrar en este estado. Se puede arrastrar, seleccionar un punto y consultar su ficha desde el mapa y la lista. |
 | 6 | F0871–F1162 (14,5–19,35 s) | Salida escalonada y regreso al borde para un modo demo en loop. El dashboard operativo se queda en el estado interactivo. |
-| 7 | Extensión TSUMI | Solicitar análisis real desde el punto seleccionado y presentar evidencia, unidades y fuentes en el HUD. El descenso por capas es una extensión del producto. |
+| 7 | Extensión TZUMY | Solicitar análisis real desde el punto seleccionado y presentar evidencia, unidades y fuentes en el HUD. El descenso por capas es una extensión del producto. |
 
 Estado actual: la apertura y el globo interactivo se renderizan en Three.js con GSAP. La tabla anterior documenta el plan de réplica y usa Mapbox como referencia técnica. Si se incorpora Mapbox en una etapa posterior, habrá que instalar su SDK y configurar un token público para los estilos alojados. Los videos de referencia y las comparativas se conservan en la carpeta local ignorada por Git.
 

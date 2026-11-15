@@ -1,6 +1,6 @@
 # nasa-azzu-front
 
-**TSUMI Atlas** permite explorar lugares terrestres y comparar su relieve con regiones de la Luna o Marte. Distingue sitios registrados de candidatos por revisar: ninguno se presenta como aprobado por NASA.
+**TZUMY Atlas** permite explorar lugares terrestres y comparar su relieve con regiones de la Luna o Marte. Distingue sitios registrados de candidatos por revisar: ninguno se presenta como aprobado por NASA.
 
 El recorrido es **lugar → región de referencia → variable → comparación**. Cada variable tiene
 un apartado con nombre sencillo, definición y leyenda de unidades:

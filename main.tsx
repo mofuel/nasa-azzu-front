@@ -752,7 +752,7 @@ function App() {
         <div className="map-stage" ref={map} role="region" aria-label="Ubicación en el globo">
           {!showIntro && <>
             <div className="map-heading">
-              <span className="console-label">TSUMI / ATLAS TERRESTRE</span>
+              <span className="console-label">TZUMY / ATLAS TERRESTRE</span>
               <strong>{site ? siteName(site) : 'Encuentra un lugar para comparar'}</strong>
               <p>{site ? coordinates(site) : 'Arrastra para girar · selecciona un punto para acercarte'}</p>
             </div>
@@ -766,7 +766,7 @@ function App() {
         {showIntro && <button className="skip-orbit" onClick={() => setShowIntro(false)}>Saltar introducción</button>}
         <div className="atlas-grid" inert={showIntro}>
           <aside className="panel" aria-label="Lugares terrestres">
-            <p className="eyebrow">TSUMI · ATLAS</p>
+            <p className="eyebrow">TZUMY · ATLAS</p>
             <h1>Análogos terrestres</h1>
             <p>Explora lugares de la Tierra y compara su relieve con regiones de la Luna o Marte.</p>
             <h2>1. Elige un lugar</h2>
