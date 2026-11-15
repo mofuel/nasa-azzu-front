@@ -107,8 +107,9 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     controls.enabled = false
     controls.enablePan = false
     controls.enableZoom = false
-    controls.enableDamping = !reduced
+    controls.enableDamping = false
     controls.rotateSpeed = .65
+    controls.autoRotateSpeed = .20
     const ambient = new THREE.AmbientLight(0xaac8ff, .85)
     scene.add(ambient)
     const sun = new THREE.DirectionalLight(0xffecd4, 2.5)
@@ -258,6 +259,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     }
     let movement: gsap.core.Tween | undefined
     focus.current = site => {
+      controls.autoRotate = false
       movement?.kill()
       const from = camera.position.clone().normalize()
       const to = location(site, 1).normalize()
@@ -275,6 +277,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     const ray = new THREE.Raycaster()
     let origin: [number, number] | undefined
     const down = (e: PointerEvent) => {
+      if (controls.enabled) controls.autoRotate = false
       origin = [e.clientX, e.clientY]
       movement?.kill()
     }
@@ -372,6 +375,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       drawShot()
       cinematic = false
       controls.enabled = true
+      controls.autoRotate = !reduced
       fitInteractiveGlobe()
       pinMat.uniforms.reveal.value = 1
       controls.update()
@@ -401,9 +405,13 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       prepareInteractiveView()
     }
     let frame = 0
+    let previousFrame = performance.now()
     const render = () => {
+      const now = performance.now()
+      const delta = Math.min((now - previousFrame) / 1000, .05)
+      previousFrame = now
       if (cinematic) drawShot()
-      controls.update()
+      controls.update(delta)
       updatePins()
       renderer.render(scene, camera)
       frame = requestAnimationFrame(render)
