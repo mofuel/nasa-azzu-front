@@ -364,11 +364,13 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       camera.updateProjectionMatrix()
     }
 
+    let repaintAfterResize: (() => void) | undefined
     function resizeViewport() {
       camera.aspect = el.clientWidth / Math.max(el.clientHeight, 1)
       if (controls.enabled) fitInteractiveGlobe()
       else camera.updateProjectionMatrix()
       renderer.setSize(el.clientWidth, el.clientHeight)
+      repaintAfterResize?.()
     }
     resizeViewport()
     const size = new ResizeObserver(resizeViewport)
@@ -459,6 +461,8 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       .to(shot, { light: .16, duration: .5, ease: 'none' }, 1.5)
       .to(shot, { shadow: -8, duration: .78, ease: 'sine.inOut' }, 3.3)
       .to(shot, { light: .65, settle: 1, duration: .85, ease: 'sine.out' }, 4)
+      .to(el, {'--handoff-progress': 1, duration: .9, ease: 'sine.inOut'}, INTRO_END - .9)
+      .to(el.querySelector('.imagery-credit'), {autoAlpha: opening ? 0 : 1, duration: .25, ease: 'sine.out'}, INTRO_END - .4)
       .call(() => finish.current?.(), [], INTRO_END)
     if (cinematic) {
       controls.enabled = false
@@ -473,6 +477,11 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       satellite.update(cinematic ? THREE.MathUtils.smoothstep(intro.time(), 4.4, INTRO_END) : 1, sun, ambient.intensity)
       updatePins()
       renderer.render(scene, camera)
+    }
+    // Resizing clears the WebGL buffer; repaint before the browser composites it.
+    repaintAfterResize = () => {
+      if (cinematic) drawShot()
+      paint()
     }
     const render = () => {
       const now = performance.now()
