@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+:root{font-family:Inter,system-ui,sans-serif;color:#edf2f8;background:#080c13;color-scheme:dark;--muted:#aebccc;--mint:#a0ffda;--line:#334352;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box}
+body{margin:0}
+a{color:var(--mint)}
+button,select{font:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+section{position:relative}
+.stars{background-color:#080c13;background-image:radial-gradient(ellipse at 72% 48%,#18303e77,transparent 56%),radial-gradient(1px 1px at 20% 12%,#e5efff88 98%,transparent),radial-gradient(1px 1px at 77% 61%,#a9c8f888 98%,transparent),radial-gradient(1px 1px at 11% 91%,#d5e5ff66 98%,transparent);background-size:auto,173px 149px,239px 161px,113px 197px}
+.eyebrow{font:500 .72rem/1.6 var(--mono);letter-spacing:.16em;color:var(--mint);text-transform:uppercase}
+h1,h2{font-family:'Barlow Condensed',Inter,sans-serif;margin:0;font-weight:700;line-height:.98;letter-spacing:-.015em}
+h1{font-size:clamp(4rem,10vw,10rem)}
+h2{font-size:clamp(2.5rem,6vw,5rem)}
+.action{display:inline-flex;align-items:center;gap:1.3rem;color:#091912;background:var(--mint);border:1px solid var(--mint);padding:.8rem 1rem;border-radius:3px;font-weight:700;text-decoration:none;font-size:.85rem}
+.action:hover{background:#d3ffed}
+.explore{padding:clamp(30px,5vw,80px) clamp(20px,7vw,110px);min-height:100svh}
+.scene-heading>p:last-child,.panel p:not(.eyebrow){color:var(--muted);line-height:1.6}
+.atlas-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(250px,1fr);gap:clamp(12px,5vw,80px);align-items:center}
+.globe{height:clamp(330px,55vw,630px);position:relative;cursor:grab}
+.globe:active{cursor:grabbing}
+.globe canvas{display:block;max-width:100%}
+.globe-fallback{width:70%;aspect-ratio:1;border-radius:50%;margin:auto;background:radial-gradient(circle at 32% 26%,transparent 25%,#040a16 85%),url('/earth.jpg') center/cover;box-shadow:0 0 36px #639bff88}
+.panel{background:#0b1421ef;border:1px solid var(--line);padding:clamp(16px,3vw,30px);border-radius:5px}
+.panel.h2{margin-top:.4rem}
+.site-button{display:flex;justify-content:space-between;gap:10px;width:100%;border:1px solid var(--line);padding:.9rem;color:inherit;background:#101c2a;text-align:left;margin-top:8px}
+.site-button:hover,.site-button[aria-pressed=true]{border-color:var(--mint);color:var(--mint)}
+.site-detail{border-top:1px solid var(--line);margin-top:1.2rem;padding-top:.25rem}
+.coordinates,.mode{font:400 .72rem/1.5 var(--mono)}
+label{display:block;margin-bottom:.5rem;font-size:.88rem}
+select{max-width:100%;padding:.65rem;background:#101c2a;color:inherit;border:1px solid var(--line)}
+.results{isolation:isolate;overflow:hidden;min-height:100svh;display:grid;align-items:end;padding:clamp(22px,8vw,110px)}
+.terrain,.dust{position:absolute;inset:0;z-index:-1}
+.terrain{background:linear-gradient(180deg,#07101d44,#080c13bb),url('/terrain.jpg') center/cover,#403023}
+.dust{opacity:0;background:radial-gradient(ellipse at 36% 48%,#d3b693 8%,#98785c88 50%,transparent 75%)}
+.result-panel{max-width:780px;width:100%}
+.back{color:var(--mint);border:0;background:none;padding:0;margin-bottom:1rem}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:1rem 0}
+.metrics dt{font-size:.8rem;color:var(--muted)}
+.metrics dd{margin:.4rem 0 0;font-size:1.2rem}
+@media(max-width:720px){.atlas-grid{grid-template-columns:1fr}.globe{height:clamp(270px,85vw,510px)}}
+.haze,.foreground{position:absolute;inset:0;pointer-events:none;z-index:-1}
+.haze{background:linear-gradient(174deg,#9aa8bf44,transparent 46%)}
+.foreground{background:linear-gradient(0deg,#09090fe8,transparent 67%)}
+.skip-orbit{position:absolute;right:max(1rem,env(safe-area-inset-right));bottom:max(1rem,env(safe-area-inset-bottom));padding:.6rem .8rem;color:#edf2f8;background:#080c13b8;border:1px solid #8293a660;border-radius:3px;font-size:.75rem}
+.explore{min-height:100svh;isolation:isolate;display:flex;justify-content:flex-end;align-items:center;overflow:hidden;background-color:#030507}
+.explore .globe{position:absolute;inset:0;height:100%;width:100%;z-index:0}
+.explore .atlas-grid{display:block;position:relative;width:min(340px,100%);pointer-events:none}
+.explore .panel{pointer-events:auto;background:#0b1421c9;backdrop-filter:blur(10px)}
+.explore.opening .atlas-grid{visibility:hidden}
+.explore.opening .globe{pointer-events:none}
+.skip-orbit{z-index:2}
+@media(max-width:720px){.explore{align-items:flex-end;padding-top:55svh}.explore .globe{height:100svh}.explore .atlas-grid{width:100%}}
+.explore.stars{background:#05080c radial-gradient(ellipse at 37% 37%,#3a485b66,transparent 60%);background-image:radial-gradient(ellipse at 37% 37%,#63738d31,transparent 62%),url('/starfield.webp');background-size:cover;background-position:center}
+.solar-flare{position:absolute;top:28%;left:44%;width:clamp(310px,65svh,760px);aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none;mix-blend-mode:screen;background:radial-gradient(circle,#fffdf6 0 2.2%,#f6f9ff 3.7%,#edf3ffad 5.7%,#b7d1fa58 11%,#98afd128 23%,#7d9bbc12 38%,transparent 65%)}
+.solar-flare::before{content:'';position:absolute;inset:48.9% 0;background:radial-gradient(ellipse,#e8f6ff8a 0%,#afc9fa30 23%,transparent 69%);filter:blur(2px)}
+.solar-flare::after{content:'';position:absolute;inset:22%;background:repeating-conic-gradient(from 7deg,transparent 0deg 28deg,#a6bce723 32deg,transparent 37deg 60deg);mask-image:radial-gradient(circle,#000,transparent 63%);filter:blur(3px)}
+.explore.stars{background-image:radial-gradient(ellipse at 30% 33%,#7b8da344,transparent 63%),url('/starfield.webp')}
+.solar-flare{width:clamp(300px,100svh,1050px);background:radial-gradient(circle,#fffef9 0 1.8%,#fefcff 2.5%,#e0ebffd6 3.4%,#bdcef488 5.5%,#97afd847 11%,#8da2c425 22%,#8199bc11 37%,transparent 66%)}
+.solar-flare {
+  --flare: 0;
+  --disc: 0;
+  width: clamp(350px, 118svh, 1180px);
+  opacity: var(--flare);
+  background: radial-gradient(circle, #e1ebffd4 0%, #bacde798 4%, #a2b7d15c 12%, #91a7c240 22%, #8199bc18 40%, transparent 69%);
+}
+.solar-flare::before {
+  inset: 0;
+  opacity: calc(var(--disc) * var(--streak, 1));
+  filter: blur(1px);
+  background: radial-gradient(ellipse 35% 1% at center, #e9f4ff7a, transparent);
+}
+.solar-flare::after {
+  inset: 9%;
+  transform: rotate(-17deg);
+  opacity: calc(var(--disc) * .65);
+  background: repeating-conic-gradient(from 5deg, transparent 0deg 36deg, #c7d9fa32 41deg, transparent 46deg 60deg);
+  mask-image: radial-gradient(circle, transparent 1%, #000 9%, transparent 66%);
+}
+
+.solar-flare {
+  background:
+    radial-gradient(ellipse 8% 24% at center, rgb(255 218 181 / var(--limb-glow, 0)), transparent 76%),
+    radial-gradient(ellipse 60% 49% at 43% 50%, rgb(178 194 216 / calc(var(--limb-glow, 0) * .54)), transparent 85%),
+    radial-gradient(circle, #e1ebffd4 0%, #bacde798 4%, #a2b7d15c 12%, #91a7c240 22%, #8199bc18 40%, transparent 69%);
+}
+.solar-flare {
+  mask-image:
+    radial-gradient(ellipse closest-side, #000 36%, #000b 61%, #0003 83%, transparent 100%),
+    linear-gradient(90deg, #000 calc(54% + var(--disc) * 46%), transparent calc(68% + var(--disc) * 32%));
+  mask-composite: intersect;
+}
+.explore.opening{height:100svh;padding:0;border-top:0}
+.solar-flare {
+  background:
+    radial-gradient(ellipse 49% 40% at 32% 52%, rgb(177 188 207 / calc(var(--afterglow, 0) * .39)), transparent 100%),
+    radial-gradient(ellipse 8% 24% at center, rgb(255 218 181 / var(--limb-glow, 0)), transparent 76%),
+    radial-gradient(ellipse 60% 49% at 43% 50%, rgb(178 194 216 / calc(var(--limb-glow, 0) * .54)), transparent 85%),
+    radial-gradient(circle, #e1ebffd4 0%, #bacde798 4%, #a2b7d15c 12%, #91a7c240 22%, #8199bc18 40%, transparent 69%);
+}
+
+.solar-afterglow {
+  position: absolute;
+  inset: 0;
+  opacity: var(--afterglow, 0);
+  background: conic-gradient(from 0deg,
+    transparent 0deg 195deg,
+    #9aabce33 208deg, transparent 220deg,
+    #a5bbdf70 240deg, transparent 252deg,
+    #b4c6e58c 265deg, transparent 274deg,
+    #9eadd170 288deg, transparent 297deg,
+    #9aaed048 314deg, transparent 326deg);
+  filter: blur(5px);
+  mask-image: radial-gradient(ellipse at center, #000 4%, #000a 26%, transparent 67%);
+}
+
+
+@media (prefers-reduced-motion: no-preference) {
+  .explore:not(.opening) .atlas-grid { animation: console-enter 420ms ease-out both; }
+  @keyframes console-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+.solar-limb-light {
+  position: absolute;
+  inset: 0;
+  opacity: var(--edge-light, 0);
+  background:
+    radial-gradient(ellipse 2.3% 12% at 50% 50%, #fff0db 0%, #ffe0be9e 24%, #ffba7c30 62%, transparent 100%),
+    radial-gradient(ellipse 5% 19% at 49% 50%, #ffd5ae58, transparent 100%);
+}
+
+.explore.opening canvas { position: relative; z-index: 1; }
+.solar-disc, .solar-flare {
+  left: var(--solar-x, 44%);
+  top: var(--solar-y, 28%);
+}
+.solar-disc {
+  position: absolute;
+  width: clamp(350px, 118svh, 1180px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: var(--solar-disc-opacity, 0);
+  background: radial-gradient(circle, #fffefb 0 3.1%, #f9f9ff 3.8%, #dfebffe0 5%, #c8dbff6b 8%, transparent 14%);
+}
+.solar-flare { z-index: 2; }
+.skip-orbit { z-index: 3; }
+.solar-daybreak {
+  position: absolute;
+  inset: 0;
+  opacity: var(--daybreak, 0);
+  background:
+    radial-gradient(circle, #fffefbc4 0%, #e9f1ff93 4%, #d4e1fc5e 9%, #b4c6e332 18%, transparent 36%),
+    radial-gradient(ellipse 54% 48% at 46% 49%, #9eb1cc44, transparent 98%);
+}
+.orbital-haze {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--orbital-haze, 0);
+  background:
+    radial-gradient(ellipse 45% 65% at var(--solar-x, 34%) 46%, #b6bed32c, #97a5c119 46%, transparent 100%),
+    radial-gradient(ellipse 55% 76% at 15% 55%, #8e9cb41d, transparent 100%);
+}
