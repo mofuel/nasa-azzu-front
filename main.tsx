@@ -9,29 +9,50 @@ type Site = { id: string; name: string; lat: number; lon: number; coverage: stri
 type Comparison = { id: string; label: string; variable: string; reference: string }
 type Result = { earthValue: number; referenceValue: number; unit: string; difference: number; scale: string; limitation: string; sources: { title: string; url: string }[] }
 type Analysis = { id: string; status: 'pending' | 'running' | 'completed' | 'insufficient_data' | 'failed'; result?: Result; message?: string }
-const api = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '')
-const localSites: Site[] = [
-  { id: 'atacama', name: 'Desierto de Atacama', lat: -23.5, lon: -68.3, coverage: 'Caso ilustrativo' },
-  { id: 'hawaii', name: 'Hawái', lat: 19.48, lon: -155.61, coverage: 'Sitio de referencia' },
-  { id: 'mojave', name: 'Desierto de Mojave', lat: 35.03, lon: -115.48, coverage: 'Sitio de referencia' },
-  { id: 'death-valley', name: 'Valle de la Muerte', lat: 36.24, lon: -116.82, coverage: 'Sitio de referencia' },
-  { id: 'haughton', name: 'Cráter de Haughton', lat: 75.38, lon: -89.67, coverage: 'Sitio de referencia' },
-  { id: 'iceland', name: 'Islandia', lat: 64.82, lon: -16.63, coverage: 'Sitio de referencia' },
-  { id: 'antarctica', name: 'Antártida', lat: -77.6, lon: 162.9, coverage: 'Sitio de referencia' },
-  { id: 'aso', name: 'Caldera de Aso', lat: 32.8849, lon: 131.085, coverage: 'Sitio exploratorio' },
-  { id: 'klyuchevskoy', name: 'Volcán Kliuchevskói', lat: 56.056, lon: 160.642, coverage: 'Sitio exploratorio' },
-  { id: 'ijen', name: 'Complejo volcánico de Ijen', lat: -8.058, lon: 114.242, coverage: 'Sitio exploratorio' },
-  { id: 'rabaul', name: 'Caldera de Rabaul', lat: -4.2459, lon: 152.1937, coverage: 'Sitio exploratorio' },
-  { id: 'ambrym', name: 'Volcán Ambrym', lat: -16.25, lon: 168.12, coverage: 'Sitio exploratorio' },
-  { id: 'taupo', name: 'Caldera de Taupō', lat: -38.7811, lon: 175.893, coverage: 'Sitio exploratorio' }
-]
-const demoComparison = { id: 'demo', label: 'Comparación con Marte', variable: 'Material superficial', reference: 'Marte · región por definir' }
+const api = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '') || '/api'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+const variableGuides: Record<string, { name: string; description: string; legend: string; difference: string }> = {
+  pendiente_mediana: {
+    name: 'Inclinación habitual',
+    description: 'Resume qué tan inclinado es el terreno: la mitad de las pendientes está por debajo de este valor y la otra mitad, por encima.',
+    legend: 'Se mide en grados (°). 0° es plano; un valor mayor indica un terreno más inclinado.',
+    difference: 'de inclinación habitual'
+  },
+  pendiente_p90: {
+    name: 'Zonas más inclinadas',
+    description: 'Es la pendiente que no supera el 90 % del terreno. Ayuda a reconocer zonas exigentes para caminar o circular con un vehículo; no es la pendiente máxima.',
+    legend: 'Se mide en grados (°). Un valor mayor indica pendientes más pronunciadas.',
+    difference: 'de inclinación en el percentil 90'
+  },
+  relieve: {
+    name: 'Desnivel del terreno',
+    description: 'Mide la diferencia de altura entre las partes bajas y altas, dejando fuera el 5 % más bajo y el 5 % más alto.',
+    legend: 'Se mide en metros (m). Un valor mayor indica más variación de altura, no mayor altitud sobre el mar.',
+    difference: 'de desnivel'
+  }
+}
+
+function variableGuide(choice: Comparison) {
+  return variableGuides[choice.id.split('~').at(-1)!] ?? {
+    name: choice.variable, description: '', legend: 'Las dos mediciones se muestran en la misma unidad.', difference: ''
+  }
+}
+
+const number = (value: number) => value.toLocaleString('es', { maximumFractionDigits: 2 })
+const coordinates = (site: Site) => `${number(Math.abs(site.lat))}° ${site.lat < 0 ? 'S' : 'N'}, ${number(Math.abs(site.lon))}° ${site.lon < 0 ? 'O' : 'E'}`
+const catalogNames: Record<string, string> = {
+  'TIE-SFVF': 'Campo volcánico de San Francisco',
+  'TIE-SP-CRATER': 'Cráter SP'
+}
+const siteName = (site: Site) => site.name === site.id && site.id.startsWith('TIE-')
+  ? catalogNames[site.id] ?? site.id.slice(4).toLowerCase().split('-').filter(Boolean).map(word => word[0].toUpperCase() + word.slice(1)).join(' ')
+  : site.name
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(api + path, init)
   if (!response.ok) throw new Error('La API respondió con el código ' + response.status)
-  return response.json()
+  try { return await response.json() }
+  catch { throw new Error('El servicio no devolvió datos válidos.') }
 }
 
 function location(site: Pick<Site, 'lat' | 'lon'>, radius = 1.014) {
@@ -91,6 +112,10 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
   const finish = useRef<(() => void) | null>(null)
   const flare = useRef<HTMLDivElement>(null)
   const select = useRef(onSelect)
+  const zoom = useRef<((factor: number) => void) | null>(null)
+  const overview = useRef<(() => void) | null>(null)
+  const selectedSite = useRef(selected)
+  selectedSite.current = selected
   select.current = onSelect
   const [unavailable, setUnavailable] = useState(false)
   useEffect(() => {
@@ -99,6 +124,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     try { renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true }) }
     catch { setUnavailable(true); onReady(); return }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7))
+    renderer.domElement.setAttribute('aria-hidden', 'true')
     el.append(renderer.domElement)
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(36, 1, .01, 60)
@@ -106,7 +132,9 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enabled = false
     controls.enablePan = false
-    controls.enableZoom = false
+    controls.enableZoom = true
+    controls.minDistance = 1.3
+    controls.maxDistance = 8
     controls.enableDamping = false
     controls.rotateSpeed = .65
     controls.autoRotateSpeed = .20
@@ -222,7 +250,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      uniforms: { reveal: { value: 1 } },
+      uniforms: { reveal: { value: 1 }, highlight: { value: 0 } },
       vertexShader: `
         varying vec2 markerUv;
         void main() {
@@ -232,6 +260,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       `,
       fragmentShader: `
         uniform float reveal;
+        uniform float highlight;
         varying vec2 markerUv;
         void main() {
           float radius = length(markerUv - 0.5);
@@ -241,26 +270,35 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
           float edge = 1.0 - smoothstep(0.39, 0.49, radius);
           float alpha = max(ring, glow) * edge * reveal;
           if (alpha < 0.01) discard;
-          gl_FragColor = vec4(mix(vec3(0.28, 0.46, 0.86), vec3(0.70, 0.82, 1.0), ring), alpha);
+          vec3 color = mix(vec3(0.28, 0.46, 0.86), vec3(0.70, 0.82, 1.0), ring);
+          gl_FragColor = vec4(mix(color, vec3(1.0, 0.68, 0.27), highlight), alpha);
         }
       `
     })
+    const selectedPinMat = pinMat.clone()
+    selectedPinMat.uniforms.highlight.value = 1
     const pins = new THREE.Group()
     scene.add(pins)
     markers.current = entries => {
       pins.clear()
       for (const site of entries) {
-        const pin = new THREE.Mesh(pinGeo, pinMat)
+        const pin = new THREE.Mesh(pinGeo, site.id === selectedSite.current?.id ? selectedPinMat : pinMat)
         pin.position.copy(location(site, 1.006))
-        pin.renderOrder = 3
+        pin.renderOrder = site.id === selectedSite.current?.id ? 4 : 3
         pin.userData.site = site
         pins.add(pin)
       }
     }
     let movement: gsap.core.Tween | undefined
+    let zoomed = false
     focus.current = site => {
+      zoomed = true
       controls.autoRotate = false
       movement?.kill()
+      for (const pin of pins.children) {
+        (pin as THREE.Mesh).material = pin.userData.site.id === site.id ? selectedPinMat : pinMat
+        pin.renderOrder = pin.userData.site.id === site.id ? 4 : 3
+      }
       const from = camera.position.clone().normalize()
       const to = location(site, 1).normalize()
       const rotation = new THREE.Quaternion().setFromUnitVectors(from, to)
@@ -269,8 +307,22 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       const distance = camera.position.length()
       movement = gsap.to(progress, { value: 1, duration: reduced ? 0 : .7, onUpdate: () => {
         q.identity().slerp(rotation, progress.value)
-        camera.position.copy(from).applyQuaternion(q).multiplyScalar(distance)
+        camera.position.copy(from).applyQuaternion(q).multiplyScalar(THREE.MathUtils.lerp(distance, 1.8, progress.value))
       } })
+    }
+    zoom.current = factor => {
+      zoomed = true
+      movement?.kill()
+      controls.autoRotate = false
+      camera.position.setLength(THREE.MathUtils.clamp(camera.position.length() * factor, controls.minDistance, controls.maxDistance))
+      controls.update()
+    }
+    overview.current = () => {
+      movement?.kill()
+      controls.autoRotate = false
+      zoomed = false
+      fitInteractiveGlobe()
+      controls.update()
     }
     const canvas = renderer.domElement
     const pointer = new THREE.Vector2()
@@ -281,6 +333,12 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       origin = [e.clientX, e.clientY]
       movement?.kill()
     }
+    const interrupt = () => {
+      zoomed = true
+      controls.autoRotate = false
+      movement?.kill()
+    }
+    controls.addEventListener('start', interrupt)
     const up = (e: PointerEvent) => {
       if (!controls.enabled) return
       const start = origin
@@ -296,8 +354,11 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     canvas.addEventListener('pointerdown', down)
     canvas.addEventListener('pointerup', up)
     function fitInteractiveGlobe() {
-      const radius = 1 / (2 * halfFov * Math.sqrt(camera.position.lengthSq() - 1))
-      camera.zoom = Math.min(1, .44 * camera.aspect / radius)
+      if (!zoomed) {
+        const radius = Math.min(.398, .43 * camera.aspect)
+        camera.position.setLength(Math.hypot(1, 1 / (2 * radius * halfFov)))
+      }
+      camera.zoom = 1
       camera.updateProjectionMatrix()
     }
 
@@ -366,7 +427,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
         if (!pin.visible) continue
         pin.quaternion.copy(camera.quaternion)
         const limbScale = THREE.MathUtils.smoothstep(facing, 1.01, 1.14)
-        pin.scale.setScalar(camera.position.distanceTo(pin.position) * .021 * limbScale)
+        pin.scale.setScalar(camera.position.distanceTo(pin.position) * .03 * limbScale * (pin.userData.site.id === selectedSite.current?.id ? 2 : 1))
       }
     }
 
@@ -421,12 +482,17 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       cancelAnimationFrame(frame)
       intro.kill()
       finish.current = null
+      focus.current = null
+      markers.current = null
+      zoom.current = null
+      overview.current = null
       movement?.kill()
       size.disconnect()
       canvas.removeEventListener('pointerdown', down)
       canvas.removeEventListener('pointerup', up)
+      controls.removeEventListener('start', interrupt)
       controls.dispose()
-      for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat]) asset.dispose()
+      for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat, selectedPinMat]) asset.dispose()
       renderer.dispose()
       canvas.remove()
     }
@@ -434,8 +500,15 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
   useEffect(() => { markers.current?.(sites) }, [sites])
   useEffect(() => { if (selected) focus.current?.(selected) }, [selected])
   useLayoutEffect(() => { if (!opening) finish.current?.() }, [opening])
-  return <div className="globe" ref={host} aria-hidden="true">
+  return <div className="globe" ref={host}>
     {unavailable && <div className="globe-fallback" />}
+    {!opening && !unavailable && <div className="globe-tools" aria-label="Controles del globo">
+      <button onClick={() => zoom.current?.(.8)} aria-label="Acercar">+</button>
+      <button onClick={() => zoom.current?.(1.25)} aria-label="Alejar">−</button>
+      <button onClick={() => overview.current?.()}>Vista global</button>
+      {selected && <button onClick={() => focus.current?.(selected)}>Volver al lugar</button>}
+    </div>}
+    {unavailable && <p className="map-unavailable" role="status">No se pudo cargar el globo. Puedes consultar los lugares y sus datos en la lista.</p>}
     {opening && <>
       <div className="orbital-haze" />
       <div className="solar-disc" />
@@ -466,101 +539,150 @@ function ComparisonChart({ data, reference }: { data: Result; reference: string 
             width: Math.abs(position - zero) + '%'
           }} />
         </div>
-        <strong>{sample.value} {data.unit}</strong>
+        <strong>{number(sample.value)} {data.unit}</strong>
       </div>
     })}
   </div>
 }
 
-function ConsoleReadouts({ site, choice, analysis, data, error, onRetry }: {
-  site?: Site; choice?: Comparison; analysis?: Analysis; data?: Result; error: string; onRetry: () => void
+function ComparisonControls({ site, choices, choice, loading, choiceError, analysis, onCompare, onChoice, onRetryChoices }: {
+  site?: Site; choices: Comparison[]; choice?: Comparison; loading: boolean; choiceError: string;
+  analysis?: Analysis; onCompare: () => void;
+  onChoice: (id: string) => void; onRetryChoices: () => void
 }) {
   const reference = choice?.reference ?? 'Referencia'
-  const metrics = [
-    { label: 'Variable', value: choice?.variable ?? '—' },
-    { label: 'Tierra', value: data ? data.earthValue + ' ' + data.unit : '—' },
-    { label: 'Referencia', value: data ? data.referenceValue + ' ' + data.unit : '—' },
-    { label: 'Diferencia', value: data ? data.difference + ' ' + data.unit : '—' }
-  ]
+  const references = [...new Set(choices.map(c => c.reference))]
+  const guide = choice && variableGuide(choice)
+  const progress = analysis?.status === 'pending' || analysis?.status === 'running'
+  return <section className="comparison-controls" aria-label="Configurar comparación">
+    {loading && <p role="status">Buscando las comparaciones de este lugar…</p>}
+    {choiceError && <div role="alert"><p>{choiceError}</p><button className="console-retry" onClick={onRetryChoices}>Reintentar comparaciones</button></div>}
+    {site && !loading && !choiceError && !choices.length && <p role="status">Todavía no hay comparaciones para este lugar. Prueba con otro.</p>}
+    {choice && guide && <>
+      <label htmlFor="reference">2. Elige una región de la Luna o Marte</label>
+      <select id="reference" value={reference} onChange={event => {
+        const options = choices.filter(c => c.reference === event.target.value)
+        onChoice((options.find(c => c.variable === choice.variable) ?? options[0]).id)
+      }}>
+        {references.map(ref => <option key={ref}>{ref}</option>)}
+      </select>
+      <fieldset className="variable-picker">
+        <legend>3. ¿Qué quieres comparar?</legend>
+        <div className="variable-options">
+          {choices.filter(c => c.reference === reference).map(c => <label className="variable-option" key={c.id}>
+            <input type="radio" name="variable" value={c.id} checked={choice.id === c.id} onChange={() => onChoice(c.id)} />
+            <span><strong>{variableGuide(c).name}</strong><small>{c.variable}</small></span>
+          </label>)}
+        </div>
+      </fieldset>
+      <button className="action" onClick={onCompare} disabled={progress}>{progress ? 'Consultando datos…' : 'Ver comparación'}</button>
+    </>}
+  </section>
+}
+
+function ConsoleReadouts({ site, choice, analysis, data, error }: {
+  site?: Site; choice?: Comparison; analysis?: Analysis; data?: Result; error: string
+}) {
+  const reference = choice?.reference ?? 'Referencia'
+  const guide = choice && variableGuide(choice)
   const progress = analysis?.status === 'pending' || analysis?.status === 'running'
   const unavailable = analysis?.status === 'insufficient_data' || analysis?.status === 'failed'
-  const status = progress ? 'Consultando el análisis…'
-    : unavailable ? analysis.message ?? 'El análisis no devolvió mediciones comparables.'
-    : !site ? 'Selecciona un sitio en la Tierra.'
-    : !choice ? 'Este sitio no tiene una comparación disponible.'
-    : !api ? 'La vista previa muestra el recorrido del sitio.'
-    : 'Ejecuta el análisis para ver las mediciones.'
-
-  return <>
-    <div className="console-map-label" aria-hidden="true">
-      <span className="console-label">TSUMI / ATLAS TERRESTRE</span>
-      {site && <strong>{site.name}</strong>}
-    </div>
-    <div className="console-map-key" aria-hidden="true">
-      <span className="console-key-dot" /> Sitios del catálogo
-    </div>
-    <section className="console-readouts" aria-label="Lecturas y comparación científica">
-      <div className="console-metrics">
-        {metrics.map((metric, index) => <div className="console-metric" key={metric.label}>
-          <span className="console-label">{metric.label}</span>
-          <strong>{metric.value}</strong>
-          <i className={index % 2 ? 'console-metric-line alternate' : 'console-metric-line'} aria-hidden="true" />
-        </div>)}
-        <div className="console-minimap">
-          <span className="console-label">Ubicación</span>
-          <div className="console-map-preview" aria-hidden="true">
-            {site && <i style={{ left: ((site.lon + 180) / 360 * 100) + '%', top: ((90 - site.lat) / 180 * 100) + '%' }} />}
-          </div>
+  const outcome = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!data) return
+    outcome.current?.focus({ preventScroll: true })
+    outcome.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'instant' : 'smooth' })
+  }, [data])
+  return <section id="comparacion" className="console-readouts" aria-label="Comparación del terreno">
+    <div className="console-metrics" aria-label="Mediciones del lugar">
+      {choice && guide && <div className="console-metric">
+        <span className="console-label">Variable</span><strong>{guide.name}</strong><small>{choice.variable}</small>
+      </div>}
+      {data && [
+        { label: 'Tierra', value: data.earthValue },
+        { label: 'Referencia', value: data.referenceValue },
+        { label: 'Diferencia', value: data.difference }
+      ].map(metric => <div className="console-metric" key={metric.label}>
+        <span className="console-label">{metric.label}</span><strong>{number(metric.value)} {data.unit}</strong>
+        <i className="console-metric-line" aria-hidden="true" />
+      </div>)}
+      {site && <div className="console-minimap">
+        <span className="console-label">Ubicación</span>
+        <div className="console-map-preview" aria-hidden="true">
+          <i style={{ left: (site.lon + 180) / 360 * 100 + '%', top: (90 - site.lat) / 180 * 100 + '%' }} />
         </div>
+        <small>{coordinates(site)}</small>
+      </div>}
+    </div>
+    <div className="console-chart">
+      <h2>Comparación del relieve</h2>
+      {guide && <div className="variable-guide">
+        {guide.description && <p>{guide.description}</p>}
+        <p className="variable-legend"><strong>Cómo leerla:</strong> {guide.legend}</p>
+      </div>}
+      {!site && <p className="console-chart-empty">Elige un lugar de la lista o un punto del globo para empezar.</p>}
+      {site && !data && !analysis && !error && <p className="console-chart-empty">Elige la región y una variable en el panel lateral. Pulsa «Ver comparación» para consultar sus mediciones.</p>}
+      {progress && <p role="status">Estamos consultando las mediciones.</p>}
+      {error && <p role="alert">{error} Puedes volver a intentarlo desde el panel lateral.</p>}
+      {unavailable && <p role="status">{analysis.message ?? 'Aún no hay mediciones suficientes para comparar este terreno.'}</p>}
+    {data && guide && <div className="comparison-result" aria-live="polite" ref={outcome} tabIndex={-1}>
+      <h3>{guide.name}: Tierra frente a {reference}</h3>
+      <ComparisonChart data={data} reference={reference} />
+      <div className="chart-legend" aria-label="Leyenda del gráfico">
+        <span><i className="earth-swatch" aria-hidden="true" /> Lugar terrestre</span>
+        <span><i className="reference-swatch" aria-hidden="true" /> Mediana de la región de referencia</span>
       </div>
-      <div className="console-chart">
-        <div className="console-chart-title">
-          <h2>Comparación científica</h2>
-          <span className="console-label">{data?.unit ?? 'Tierra / Luna o Marte'}</span>
-        </div>
-        {data ? <ComparisonChart data={data} reference={reference} /> : <div className="console-chart-empty">
-          {error ? <><p role="alert">{error}</p><button className="console-retry" onClick={onRetry}>Reintentar</button></> : <p role="status">{status}</p>}
-        </div>}
-        {data && <details className="console-evidence">
-          <summary>Fuentes y límites</summary>
-          <p>{data.scale}</p><p>{data.limitation}</p>
-          <ul>{data.sources.filter(source => /^https?:\/\//i.test(source.url)).map(source => <li key={source.url}><a href={source.url}>{source.title}</a></li>)}</ul>
-        </details>}
-      </div>
-    </section>
-  </>
+      <p className="difference">{data.difference === 0
+        ? 'Los dos valores coinciden en esta medida.'
+        : `El lugar terrestre tiene ${number(Math.abs(data.difference))} ${data.unit} ${data.difference > 0 ? 'más' : 'menos'} ${guide.difference} que la referencia.`}</p>
+      <p className="comparison-caution">Un valor parecido en una medida no significa que los lugares sean iguales ni que el sitio sea apto para una misión.</p>
+      <details className="console-evidence"><summary>Escala y método de comparación</summary><p>{data.scale}</p></details>
+      <details className="console-evidence"><summary>Contexto ambiental y límites</summary><p>{data.limitation}</p></details>
+      <details className="console-evidence">
+        <summary>Fuentes de datos</summary>
+        <ul>{data.sources.filter(source => /^https?:\/\//i.test(source.url)).map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>
+      </details>
+    </div>}
+    </div>
+  </section>
 }
 
 function App() {
-  const [sites, setSites] = useState<Site[]>(api ? [] : localSites)
+  const [sites, setSites] = useState<Site[]>([])
   const [site, setSite] = useState<Site>()
   const [choices, setChoices] = useState<Comparison[]>([])
   const [choiceId, setChoiceId] = useState('')
   const [catalogError, setCatalogError] = useState('')
+  const [loadingCatalog, setLoadingCatalog] = useState(true)
+  const [catalogAttempt, setCatalogAttempt] = useState(0)
+  const [choiceAttempt, setChoiceAttempt] = useState(0)
   const [choiceError, setChoiceError] = useState('')
   const [loadingChoices, setLoadingChoices] = useState(false)
   const [analysis, setAnalysis] = useState<Analysis>()
-  const [showResult, setShowResult] = useState(false)
   const [error, setError] = useState('')
   const pending = useRef<AbortController | null>(null)
+  const map = useRef<HTMLDivElement>(null)
   const [showIntro, setShowIntro] = useState(!reduced)
-  const result = useRef<HTMLElement>(null)
-  const explore = useRef<HTMLElement>(null)
   const choice = choices.find(c => c.id === choiceId)
 
   useEffect(() => {
-    if (!api) return
     const controller = new AbortController()
+    setLoadingCatalog(true)
+    setCatalogError('')
     request<Site[]>('/sites', { signal: controller.signal }).then(setSites).catch(e => {
-      if (!controller.signal.aborted) setCatalogError(e.message)
+      if (!controller.signal.aborted) setCatalogError('No se pudo cargar la lista de lugares. ' + e.message)
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoadingCatalog(false)
     })
     return () => controller.abort()
-  }, [])
+  }, [catalogAttempt])
 
   useEffect(() => {
     if (!site) return
     const controller = new AbortController()
-    const options = api ? request<Comparison[]>('/sites/' + encodeURIComponent(site.id) + '/comparisons', { signal: controller.signal }) : Promise.resolve(site.id === 'atacama' ? [demoComparison] : [])
+    setLoadingChoices(true)
+    setChoiceError('')
+    const options = request<Comparison[]>('/sites/' + encodeURIComponent(site.id) + '/comparisons', { signal: controller.signal })
     options.then(values => {
       if (controller.signal.aborted) return
       setChoices(values)
@@ -571,34 +693,19 @@ function App() {
       if (!controller.signal.aborted) setLoadingChoices(false)
     })
     return () => controller.abort()
-  }, [site])
-
-  useEffect(() => {
-    if (!showResult || !result.current) return
-    result.current.focus({ preventScroll: true })
-    result.current.scrollIntoView({ behavior: reduced ? 'instant' : 'smooth' })
-    if (reduced) return
-    const ctx = gsap.context(() => {
-      gsap.fromTo('.dust', { opacity: .9, xPercent: -20 }, { opacity: 0, xPercent: 30, duration: 1.15 })
-      gsap.fromTo('.terrain', { scale: 1.15 }, { scale: 1, duration: 1.4 })
-      gsap.fromTo('.haze', { xPercent: -6 }, { xPercent: 0, duration: 1.4 })
-      gsap.fromTo('.foreground', { yPercent: 18, scale: 1.12 }, { yPercent: 0, scale: 1, duration: 1.3 })
-      gsap.fromTo('.result-panel', { y: 25, opacity: 0 }, { y: 0, opacity: 1, delay: .35, duration: .6 })
-    }, result)
-    return () => ctx.revert()
-  }, [showResult])
+  }, [site?.id, choiceAttempt])
 
   function pick(next: Site) {
+    setSite({ ...next })
+    map.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'instant' : 'smooth' })
     if (site?.id === next.id) return
     pending.current?.abort()
-    setShowResult(false)
     setAnalysis(undefined)
     setError('')
     setChoices([])
     setChoiceId('')
     setChoiceError('')
     setLoadingChoices(true)
-    setSite(next)
   }
 
   function selectComparison(id: string) {
@@ -612,10 +719,6 @@ function App() {
     if (!site || !choice) return
     pending.current?.abort()
     setError('')
-    if (!api) {
-      setShowResult(true)
-      return
-    }
     setAnalysis({ id: '', status: 'pending' })
     const controller = new AbortController()
     pending.current = controller
@@ -633,58 +736,71 @@ function App() {
         response = await request<Analysis>('/analyses/' + encodeURIComponent(response.id), { signal })
       }
     } catch (e) {
-      if (!signal.aborted) setError(e instanceof Error ? e.message : 'Error consultando el análisis')
+      if (!signal.aborted) {
+        setAnalysis(undefined)
+        setError(e instanceof Error ? e.message : 'No se pudo obtener el análisis.')
+      }
     }
-  }
-
-  function back() {
-    pending.current?.abort()
-    explore.current?.focus({ preventScroll: true })
-    setShowResult(false)
-    explore.current?.scrollIntoView({ behavior: reduced ? 'instant' : 'smooth' })
   }
 
   const data = analysis?.status === 'completed' ? analysis.result : undefined
   return <>
     <main>
-      <section className={showIntro ? 'explore stars opening' : 'explore stars'} id="explorar" ref={explore} tabIndex={-1}>
+      <section className={showIntro ? 'explore stars opening' : 'explore stars'} id="explorar">
         <Globe sites={sites} selected={site} onSelect={pick} opening={showIntro} onReady={() => setShowIntro(false)} />
-        {showIntro && <button className="skip-orbit" onClick={() => setShowIntro(false)}>Saltar introducción</button>}
         {!showIntro && <div className="console-frame" aria-hidden="true" />}
+        <div className="map-stage" ref={map} role="region" aria-label="Ubicación en el globo">
+          {!showIntro && <>
+            <div className="map-heading">
+              <span className="console-label">TSUMI / ATLAS TERRESTRE</span>
+              <strong>{site ? siteName(site) : 'Encuentra un lugar para comparar'}</strong>
+              <p>{site ? coordinates(site) : 'Arrastra para girar · selecciona un punto para acercarte'}</p>
+            </div>
+            <div className="map-legend" aria-label="Leyenda del mapa">
+              <span><i className="earth-swatch" aria-hidden="true" /> Lugar del catálogo</span>
+              <span><i className="selected-swatch" aria-hidden="true" /> Tu selección</span>
+              <small>Vista global, no imagen de detalle del terreno.</small>
+            </div>
+          </>}
+        </div>
+        {showIntro && <button className="skip-orbit" onClick={() => setShowIntro(false)}>Saltar introducción</button>}
         <div className="atlas-grid" inert={showIntro}>
-          <aside className="panel" aria-label="Sitios y comparaciones">
-            <p className="eyebrow">SITIOS</p>
-            {catalogError && <p role="alert">{catalogError}</p>}
-            {api && !sites.length && !catalogError && <p>No hay sitios disponibles en el catálogo.</p>}
+          <aside className="panel" aria-label="Lugares terrestres">
+            <p className="eyebrow">TSUMI · ATLAS</p>
+            <h1>Análogos terrestres</h1>
+            <p>Explora lugares de la Tierra y compara su relieve con regiones de la Luna o Marte.</p>
+            <h2>1. Elige un lugar</h2>
+            {loadingCatalog && <p role="status">Cargando lugares…</p>}
+            {catalogError && <div role="alert"><p>{catalogError}</p><button className="console-retry" onClick={() => setCatalogAttempt(n => n + 1)}>Reintentar catálogo</button></div>}
+            {!loadingCatalog && !sites.length && !catalogError && <p>No hay lugares disponibles todavía.</p>}
             <div className="site-list" aria-label="Catálogo de sitios">
-              {sites.map(entry => <button className="site-button" key={entry.id} aria-pressed={site?.id === entry.id} onClick={() => pick(entry)}><span>{entry.name}</span><span aria-hidden="true">↗</span></button>)}
+              {[
+                { name: 'Sitios registrados', candidate: false },
+                { name: 'Candidatos detectados', candidate: true }
+              ].map(group => {
+                const entries = sites.filter(entry => entry.id.startsWith('T~') === group.candidate)
+                return entries.length > 0 && <div className="site-group" key={group.name}>
+                  <h3>{group.name} <span>({entries.length})</span></h3>
+                  {entries.map(entry => <button className="site-button" key={entry.id} aria-pressed={site?.id === entry.id} onClick={() => pick(entry)}><span>{siteName(entry)}</span><span aria-hidden="true">↗</span></button>)}
+                </div>
+              })}
             </div>
             {site && <div className="site-detail">
-              <p className="coordinates">{site.lat.toFixed(2)}° LAT / {site.lon.toFixed(2)}° LON</p>
+              <h3>{siteName(site)}</h3>
+              <p className="coordinates">{coordinates(site)}</p>
               <p>{site.coverage}</p>
-              {loadingChoices && <p role="status">Consultando comparaciones…</p>}
-              {choiceError && <p role="alert">{choiceError}</p>}
-              {!choices.length && !loadingChoices && !choiceError && <p>No hay comparaciones disponibles para este sitio.</p>}
-              {!!choices.length && <>
-                <label htmlFor="comparison">Comparación</label>
-                <select id="comparison" value={choiceId} onChange={event => selectComparison(event.target.value)}>{choices.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select>
-              </>}
-              {choice && <><p>{choice.variable} · {choice.reference}</p><button className="action" onClick={analyze}>{api ? 'Analizar' : 'Previsualizar descenso'} <span aria-hidden="true">↗</span></button></>}
+              <a href="#comparacion" className="compare-link">Comparar este lugar ↓</a>
             </div>}
-            {!api && <p className="mode">Prototipo local · sin datos de análisis</p>}
+            <ComparisonControls site={site} choices={choices} choice={choice} loading={loadingChoices} choiceError={choiceError}
+              analysis={analysis} onCompare={analyze} onChoice={selectComparison} onRetryChoices={() => setChoiceAttempt(n => n + 1)} />
+            <details className="catalog-legend"><summary>¿Qué significa «candidato»?</summary>
+              <p>«3/3» indica que las tres medidas de relieve están dentro del rango de la referencia, no un 100 % de similitud. Es una preselección para investigar, no un análogo confirmado ni un sitio aprobado por NASA.</p>
+              <p>Los sitios registrados también incluyen referencias y controles; estar en la lista no implica validación.</p>
+            </details>
           </aside>
         </div>
-        {!showIntro && <ConsoleReadouts site={site} choice={choice} analysis={analysis} data={data} error={error} onRetry={analyze} />}
+        {!showIntro && <ConsoleReadouts site={site} choice={choice} analysis={analysis} data={data} error={error} />}
       </section>
-      {showResult && <section className="results" ref={result} tabIndex={-1}>
-        <div className="terrain" aria-hidden="true" /><div className="haze" aria-hidden="true" /><div className="foreground" aria-hidden="true" /><div className="dust" aria-hidden="true" />
-        <div className="result-panel panel">
-          <button className="back" onClick={back}>← Volver al globo</button>
-          <p className="eyebrow">{site?.name}</p>
-          <h2>{choice?.label}</h2>
-          <p>Vista previa del paisaje. Las mediciones y sus fuentes aparecerán al conectar el backend científico.</p>
-        </div>
-      </section>}
     </main>
   </>
 }

@@ -11,7 +11,7 @@ async function openAtlas(page, reducedMotion = 'no-preference') {
     const source = await response.text();
     const instrumented = source.replaceAll(
       /renderer\.render\(scene, camera\)/g,
-      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping}, renderer.render(scene, camera))',
+      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping, pins: pins.children.map(pin => ({id: pin.userData.site.id, selected: pin.material === selectedPinMat, screen: pin.position.clone().project(camera).toArray(), visible: pin.visible}))}, renderer.render(scene, camera))',
     );
     expect(instrumented).not.toBe(source);
     await route.fulfill({response, body: instrumented});
@@ -19,6 +19,7 @@ async function openAtlas(page, reducedMotion = 'no-preference') {
   await page.goto(atlasURL);
   const skip = page.getByRole('button', {name: 'Saltar introducción'});
   if (await skip.isVisible()) await skip.click();
+  await expect(page.getByRole('heading', {name: 'Análogos terrestres'})).toBeVisible();
   await expect(page.locator('.console-frame')).toBeVisible();
   await page.waitForFunction(() => window.__atlasProbe);
 }
@@ -69,4 +70,150 @@ test('Earth remains stationary when reduced motion is enabled', async ({page}) =
   const start = await camera(page);
   await page.waitForTimeout(1000);
   expect(distance(start, await camera(page))).toBeLessThan(.000001);
+});
+
+const sites = [
+  {id: 'TIE-CINDER-LAKE', name: 'TIE-CINDER-LAKE', lat: 35.32, lon: -111.52, coverage: 'Sitio registrado para comparación'},
+  {id: 'T~N35W112~0~0', name: 'Candidato Arizona', lat: 35.58, lon: -111.63, coverage: 'Candidato detectado · 3/3'}
+];
+const variables = [
+  ['pendiente_mediana', 'Pendiente mediana'], ['pendiente_p90', 'Pendiente P90'], ['relieve', 'Relieve P95–P5']
+];
+const choices = ['Malapert', 'Mons Mouton'].flatMap(ref => variables.map(([key, name]) => ({
+  id: ref + '~' + key, label: ref + ' · ' + name, variable: name, reference: 'Luna · ' + ref
+})));
+function completed(body) {
+  const relief = body.comparisonId.endsWith('~relieve');
+  return {id: 'prueba', status: 'completed', result: {
+    earthValue: relief ? 250 : 7, referenceValue: relief ? 200 : 6, unit: relief ? 'm' : '°',
+    difference: relief ? 50 : 1, scale: 'Teselas de 3 km a 60 m. Referencia: mediana regional.',
+    limitation: 'MODIS: enero y julio de 2025. No reproduce gravedad, atmósfera ni radiación.',
+    sources: [{title: 'NASA · fuente de prueba', url: 'https://www.nasa.gov/'}, {title: 'No abrir', url: 'javascript:alert(1)'}]
+  }};
+}
+async function mockApi(page, options = {}) {
+  await page.route('**/api/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/sites')) {
+      return route.fulfill({json: sites});
+    }
+    if (path.endsWith('/comparisons')) return route.fulfill({json: choices});
+    if (path.endsWith('/analyses')) {
+      const body = route.request().postDataJSON();
+      return route.fulfill(await (options.analysis?.(body) ?? {json: completed(body)}));
+    }
+    return route.fulfill({status: 404});
+  });
+}
+
+test('selecting a place centers and zooms in, highlights it and can be repeated', async ({page}) => {
+  await mockApi(page);
+  await openAtlas(page, 'reduce');
+  const initial = await camera(page);
+  await page.getByRole('button', {name: 'Candidato Arizona', exact: true}).click();
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeCloseTo(1.8, 3);
+  expect(Math.hypot(...initial)).toBeGreaterThan(3);
+  const lat = sites[1].lat * Math.PI / 180, lon = sites[1].lon * Math.PI / 180;
+  const direction = [Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon)];
+  const alignment = (await camera(page)).reduce((sum, value, i) => sum + value / 1.8 * direction[i], 0);
+  expect(alignment).toBeGreaterThan(.9999);
+  expect(await page.evaluate(() => window.__atlasProbe.pins.filter(p => p.selected).map(p => p.id))).toEqual([sites[1].id]);
+  await page.getByRole('button', {name: 'Vista global', exact: true}).click();
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeGreaterThan(3);
+  await page.getByRole('button', {name: 'Candidato Arizona', exact: true}).click();
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeCloseTo(1.8, 3);
+  await page.getByRole('button', {name: 'Alejar', exact: true}).click();
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeGreaterThan(2);
+  await page.getByRole('button', {name: 'Volver al lugar'}).click();
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeCloseTo(1.8, 3);
+  const viewport = page.viewportSize();
+  await page.setViewportSize({width: viewport.width - 20, height: viewport.height - 20});
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeCloseTo(1.8, 3);
+});
+
+test('clicking a globe marker also zooms in and stops the automatic rotation', async ({page}) => {
+  await mockApi(page);
+  await openAtlas(page);
+  await expect.poll(() => page.evaluate(() => window.__atlasProbe.pins.filter(pin => pin.visible).length)).toBeGreaterThan(0);
+  const pin = await page.evaluate(() => window.__atlasProbe.pins.find(pin => pin.visible));
+  const box = await page.locator('.globe canvas').boundingBox();
+  await page.mouse.click(box.x + (pin.screen[0] + 1) / 2 * box.width, box.y + (1 - pin.screen[1]) / 2 * box.height);
+  await expect(page.locator('.site-button[aria-pressed=true]')).toHaveCount(1);
+  await expect.poll(async () => Math.hypot(...await camera(page))).toBeCloseTo(1.8, 3);
+  expect(await page.evaluate(() => window.__atlasProbe.autoRotate)).toBe(false);
+});
+
+test('variables have their own explanations, units, reference and evidence', async ({page}, testInfo) => {
+  await mockApi(page);
+  await openAtlas(page, 'reduce');
+  await page.getByRole('button', {name: 'Cinder Lake', exact: true}).click();
+  await expect(page.getByRole('radio', {name: /Inclinación habitual/})).toBeChecked();
+  await expect(page.getByText(/0° es plano/)).toBeVisible();
+  await page.getByRole('radio', {name: /Zonas más inclinadas/}).check();
+  await expect(page.getByText(/no es la pendiente máxima/)).toBeVisible();
+  await page.getByRole('radio', {name: /Desnivel del terreno/}).check();
+  await expect(page.getByText(/no mayor altitud sobre el mar/)).toBeVisible();
+  await page.getByLabel('2. Elige una región').selectOption('Luna · Mons Mouton');
+  await expect(page.getByRole('radio', {name: /Desnivel del terreno/})).toBeChecked();
+  const request = page.waitForRequest(req => req.url().endsWith('/analyses') && req.method() === 'POST');
+  await page.getByRole('button', {name: 'Ver comparación', exact: true}).click();
+  expect((await request).postDataJSON()).toEqual({siteId: sites[0].id, comparisonId: 'Mons Mouton~relieve'});
+  await expect(page.getByText('El lugar terrestre tiene 50 m más de desnivel que la referencia.')).toBeVisible();
+  await expect(page.locator('.console-metric')).toHaveCount(4);
+  await expect(page.locator('.console-minimap')).toContainText('Ubicación');
+  await expect(page.locator('.console-metric').filter({hasText: 'Diferencia'})).toContainText('50 m');
+  if (testInfo.project.name === 'desktop') {
+    const globe = await page.locator('.globe canvas').boundingBox();
+    const readouts = await page.locator('.console-readouts').boundingBox();
+    // The globe continues behind the glass console, rather than living in a small upper card.
+    expect(globe.y).toBeLessThan(readouts.y);
+    expect(globe.y + globe.height).toBeGreaterThan(readouts.y + readouts.height);
+  }
+  await expect(page.getByLabel('Leyenda del gráfico')).toContainText('Mediana de la región de referencia');
+  await page.screenshot({path: testInfo.outputPath('atlas-console.png'), fullPage: true});
+  await page.getByText('Fuentes de datos', {exact: true}).click();
+  await expect(page.getByRole('link', {name: 'NASA · fuente de prueba'})).toHaveAttribute('href', 'https://www.nasa.gov/');
+  await expect(page.getByRole('link', {name: 'No abrir'})).toHaveCount(0);
+  await expect(page.getByText(/Vista previa del paisaje|región por definir|Previsualizar descenso/)).toHaveCount(0);
+  const width = await page.evaluate(() => ({content: document.documentElement.scrollWidth, viewport: innerWidth}));
+  expect(width.content).toBeLessThanOrEqual(width.viewport);
+  await page.screenshot({path: testInfo.outputPath('atlas-comparison.png'), fullPage: true});
+  await page.getByRole('radio', {name: /Inclinación habitual/}).check();
+  await expect(page.locator('.comparison-result')).toHaveCount(0);
+});
+
+test('missing measurements are not replaced with illustrative numbers', async ({page}) => {
+  await mockApi(page, {analysis: () => ({json: {id: 'sin-datos', status: 'insufficient_data', message: 'Esta celda todavía no se ha procesado.'}})});
+  await openAtlas(page, 'reduce');
+  await page.getByRole('button', {name: 'Cinder Lake', exact: true}).click();
+  await page.getByRole('button', {name: 'Ver comparación', exact: true}).click();
+  await expect(page.getByRole('status')).toContainText('Esta celda todavía no se ha procesado.');
+  await expect(page.locator('.comparison-result')).toHaveCount(0);
+  await expect(page.locator('.console-bar-row')).toHaveCount(0);
+});
+
+test('a failed analysis can be retried without a permanently disabled button', async ({page}) => {
+  let fail = true;
+  await mockApi(page, {analysis: body => fail ? {status: 503} : {json: completed(body)}});
+  await openAtlas(page, 'reduce');
+  await page.getByRole('button', {name: 'Cinder Lake', exact: true}).click();
+  await page.getByRole('button', {name: 'Ver comparación', exact: true}).click();
+  await expect(page.getByRole('alert')).toContainText('503');
+  await expect(page.getByRole('button', {name: 'Ver comparación', exact: true})).toBeEnabled();
+  fail = false;
+  await page.getByRole('button', {name: 'Ver comparación', exact: true}).click();
+  await expect(page.locator('.comparison-result')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('an unavailable catalog does not silently show demo locations', async ({page}) => {
+  await page.route('**/api/sites', route => route.fulfill({status: 503}));
+  await openAtlas(page, 'reduce');
+  await expect(page.getByRole('alert')).toContainText('No se pudo cargar la lista');
+  await expect(page.locator('.site-button')).toHaveCount(0);
+  await expect(page.getByText('Desierto de Atacama', {exact: true})).toHaveCount(0);
+  await page.route('**/api/sites', route => route.fulfill({json: sites}));
+  await page.getByRole('button', {name: 'Reintentar catálogo'}).click();
+  await expect(page.getByRole('button', {name: 'Cinder Lake', exact: true})).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });

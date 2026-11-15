@@ -1,5 +1,18 @@
 # TSUMI · Análisis y propuesta de frontend
 
+## Estado actual de la interfaz
+
+El storyboard de abajo se conserva como antecedente visual. El recorrido vigente es:
+**lugar terrestre → región lunar o marciana → variable explicada → comparación con datos de la API**.
+Se eliminaron el catálogo ilustrativo y el descenso a una fotografía de paisaje.
+La selección centra y acerca el globo; las variables tienen apartados y leyendas de unidades.
+Las limitaciones y fuentes se muestran por separado, sin presentar una coincidencia de relieve
+como certificación de analogía. Véase [README.md](README.md).
+Se mantiene la composición de consola del diseño original: globo a pantalla completa detrás
+de paneles translúcidos, marco exterior, controles laterales y tarjetas de mediciones en la franja inferior.
+
+## Antecedentes de diseño
+
 Referencia: front-referencia.mp4, 496 × 368, 60 fps, 19,37 s. Se extrajeron 1.162 fotogramas. El storyboard muestrea cada 0,5 s y la lámina del HUD cada 0,2 s. El CSV registra diferencia media de luminancia entre fotogramas. El video muestra un globo y un HUD; el descenso a paisaje por capas es una adaptación propuesta.
 
 | Fotogramas | Observación | Adaptación |
