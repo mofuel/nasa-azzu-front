@@ -7,8 +7,14 @@ import './style.css'
 
 type Site = { id: string; name: string; lat: number; lon: number; coverage: string }
 type Comparison = { id: string; label: string; variable: string; reference: string }
-type Result = { earthValue: number; referenceValue: number; unit: string; difference: number; scale: string; limitation: string; sources: { title: string; url: string }[] }
+type EarthContext = { months: string[]; resolutionDegrees: number; ndviMax: number | null; ndviValidMonths: number | null; lstDayMaxK: number | null; lstDayValidMonths: number | null; lstNightMinK: number | null; lstNightValidMonths: number | null; ndviThreshold: number; passesNdviScreen: boolean }
+type Result = { earthValue: number; referenceValue: number; unit: string; difference: number; scale: string; limitation: string; sources: { title: string; url: string }[]; earthContext?: EarthContext | null }
 type Analysis = { id: string; status: 'pending' | 'running' | 'completed' | 'insufficient_data' | 'failed'; result?: Result; message?: string }
+type SearchState = {
+  celdas: Record<string, number>; teselas: number; teselas_candidatas: number; ultima_actualizacion: string | null;
+  trabajadores: { estado: string; celda_id: string | null; senal_reciente: boolean; actualizado_utc: string; celdas_elegibles: number | null }[];
+  contexto_nasa: { meses: string[]; version_qa: string; umbral_ndvi: number } | null
+}
 const api = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '') || '/api'
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 const variableGuides: Record<string, { name: string; description: string; legend: string; difference: string }> = {
@@ -53,6 +59,67 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw new Error('La API respondió con el código ' + response.status)
   try { return await response.json() }
   catch { throw new Error('El servicio no devolvió datos válidos.') }
+}
+
+
+function SearchActivity() {
+  const [state, setState] = useState<SearchState>()
+  const [unavailable, setUnavailable] = useState(false)
+  useEffect(() => {
+    let controller: AbortController
+    async function refresh() {
+      controller?.abort()
+      controller = new AbortController()
+      const signal = controller.signal
+      try {
+        const value = await request<SearchState>('/search/status', { signal })
+        if (!signal.aborted) { setState(value); setUnavailable(false) }
+      } catch {
+        if (!signal.aborted) setUnavailable(true)
+      }
+    }
+    void refresh()
+    const timer = setInterval(refresh, 30000)
+    return () => { clearInterval(timer); controller?.abort() }
+  }, [])
+  const recent = state?.trabajadores.filter(w => w.senal_reciente) ?? []
+  const processing = !!state?.celdas.en_curso && recent.length > 0
+  const title = !state ? 'Consultando actividad…'
+    : !recent.length ? 'Sin señal reciente del trabajador'
+    : processing ? 'Analizando terreno'
+    : state.celdas.pendiente ? 'Cola preparada para analizar'
+    : recent.some(w => w.estado === 'agotado') ? 'Áreas del perfil recorridas' : 'Esperando nuevas áreas'
+  return <section className="search-activity" aria-label="Estado de la búsqueda" aria-live="polite">
+    <strong><i className={processing && !unavailable ? 'activity-dot active' : 'activity-dot'} aria-hidden="true" />{unavailable ? 'Estado de búsqueda no disponible' : title}</strong>
+    {state && !unavailable && <>
+      <p>{number(state.celdas.pendiente ?? 0)} en cola · {number((state.celdas.hecha ?? 0) + (state.celdas.sin_datos ?? 0))} terminadas · {number(state.celdas.error ?? 0)} con error</p>
+      <details><summary>Actividad y datos NASA</summary>
+        <p>{number(state.teselas)} registros de relieve a distintas resoluciones; no son lugares únicos.</p>
+        <p>{number(state.teselas_candidatas)} teselas candidatas a 60 m, pendientes de revisión científica.</p>
+        {state.ultima_actualizacion && <p>Última celda terminada: <time dateTime={state.ultima_actualizacion}>{new Date(state.ultima_actualizacion).toLocaleString('es')}</time>.</p>}
+        <p>{state.contexto_nasa ? `MODIS con control de calidad: ${state.contexto_nasa.meses.join(', ')}.` : 'Contexto NASA MODIS aún no disponible.'}</p>
+        {!recent.length && <p>No podemos confirmar que el trabajador siga activo; esto no demuestra que esté detenido.</p>}
+        <p>La búsqueda usa un perfil de NDVI bajo con datos suficientes. Puede excluir zonas con nieve, nubes o vegetación. Cuando se agotan las áreas seleccionadas, espera; no promete descubrimientos infinitos.</p>
+      </details>
+    </>}
+    {unavailable && <p>Puedes seguir consultando los lugares y sus comparaciones.</p>}
+  </section>
+}
+
+
+function EarthContextPanel({ context }: { context: EarthContext }) {
+  const coverage = (n: number | null) => n === null ? 'cobertura no informada' : `${n}/${context.months.length} meses válidos`
+  return <details className="console-evidence nasa-context">
+    <summary>Contexto NASA terrestre · vegetación y temperatura</summary>
+    <p>MODIS · {context.months.join(', ')} · píxel de {number(context.resolutionDegrees)}°, muestreado en el centro del lugar. No describe cada punto de la tesela.</p>
+    <dl className="context-values">
+      <div><dt>Vegetación · NDVI máximo</dt><dd>{context.ndviMax === null ? 'Sin dato válido' : context.ndviMax.toLocaleString('es', { maximumFractionDigits: 4 })}</dd><small>{coverage(context.ndviValidMonths)}</small></div>
+      <div><dt>Mayor media mensual diurna</dt><dd>{context.lstDayMaxK === null ? 'Sin dato válido' : number(context.lstDayMaxK) + ' K'}</dd><small>{coverage(context.lstDayValidMonths)}</small></div>
+      <div><dt>Menor media mensual nocturna</dt><dd>{context.lstNightMinK === null ? 'Sin dato válido' : number(context.lstNightMinK) + ' K'}</dd><small>{coverage(context.lstNightValidMonths)}</small></div>
+    </dl>
+    <p><strong>Cómo leerlo:</strong> NDVI es un indicador de vegetación, no una prueba de suelo desnudo. El umbral {number(context.ndviThreshold)} lo eligió el equipo, no NASA. {context.passesNdviScreen ? 'Cumple este filtro exploratorio.' : 'No cumple el filtro o faltan meses válidos.'}</p>
+    <p>K significa kelvin. Estas temperaturas son contexto terrestre de los meses disponibles: no son extremos anuales, temperatura del aire, amplitud día/noche ni comparación térmica con la Luna o Marte.</p>
+  </details>
 }
 
 function location(site: Pick<Site, 'lat' | 'lon'>, radius = 1.014) {
@@ -636,6 +703,7 @@ function ConsoleReadouts({ site, choice, analysis, data, error }: {
         ? 'Los dos valores coinciden en esta medida.'
         : `El lugar terrestre tiene ${number(Math.abs(data.difference))} ${data.unit} ${data.difference > 0 ? 'más' : 'menos'} ${guide.difference} que la referencia.`}</p>
       <p className="comparison-caution">Un valor parecido en una medida no significa que los lugares sean iguales ni que el sitio sea apto para una misión.</p>
+      {data.earthContext && <EarthContextPanel context={data.earthContext} />}
       <details className="console-evidence"><summary>Escala y método de comparación</summary><p>{data.scale}</p></details>
       <details className="console-evidence"><summary>Contexto ambiental y límites</summary><p>{data.limitation}</p></details>
       <details className="console-evidence">
@@ -769,6 +837,7 @@ function App() {
             <p className="eyebrow">TSUMI · ATLAS</p>
             <h1>Análogos terrestres</h1>
             <p>Explora lugares de la Tierra y compara su relieve con regiones de la Luna o Marte.</p>
+            <SearchActivity />
             <h2>1. Elige un lugar</h2>
             {loadingCatalog && <p role="status">Cargando lugares…</p>}
             {catalogError && <div role="alert"><p>{catalogError}</p><button className="console-retry" onClick={() => setCatalogAttempt(n => n + 1)}>Reintentar catálogo</button></div>}

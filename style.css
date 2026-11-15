@@ -78,6 +78,12 @@ p { line-height: 1.65; }
 .catalog-legend { font-size: .8rem; line-height: 1.6; }
 .catalog-legend summary { padding: 6px 0; min-height: 44px; }
 .catalog-legend p { margin-top: 8px; }
+.search-activity { flex-shrink: 0; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #ffffff08; font-size: .72rem; line-height: 1.55; }
+.search-activity strong { display: block; font-size: .75rem; }
+.search-activity p { color: var(--muted); margin-top: 5px; }
+.search-activity summary { display: flex; align-items: center; min-height: 44px; text-decoration: underline; }
+.activity-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #b5bdcc; margin-right: 6px; }
+.activity-dot.active { background: #b7e2c9; }
 .map-stage {
   grid-column: 2; grid-row: 1; position: relative; min-height: 0; min-width: 0;
   overflow: hidden; border: 1.5px solid #ffffff80; border-radius: 18px;
@@ -183,6 +189,10 @@ select { max-width: 100%; width: 100%; padding: 10px; border: 1px solid #ffffff5
 .console-evidence summary { min-height: 44px; color: #d2e1fc; font-weight: 600; }
 .console-evidence p { margin-top: 6px; }
 .console-evidence ul { padding-left: 20px; }
+.context-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 10px 0; }
+.context-values > div { padding: 10px; background: #ffffff08; border: 1px solid var(--line); border-radius: 8px; }
+.context-values dt, .context-values small { color: var(--muted); }
+.context-values dd { margin: 7px 0; font: 500 .9rem/1.5 var(--mono); }
 .globe-fallback { position: absolute; inset: 15%; border-radius: 50%; background: url('/earth.jpg') center/cover; opacity: .5; }
 .map-unavailable { position: absolute; z-index: 2; top: 30%; padding: 20px; background: #0a1428e8; font-size: .85rem; }
 
