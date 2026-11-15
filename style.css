@@ -251,3 +251,68 @@ select { max-width: 100%; width: 100%; padding: 10px; border: 1px solid #ffffff5
 .solar-limb-light { position: absolute; inset: 0; opacity: var(--edge-light, 0); background: radial-gradient(ellipse 2.3% 12% at 50% 50%, #fff0db 0%, #ffe0be9e 24%, #ffba7c30 62%, transparent 100%), radial-gradient(ellipse 5% 19% at 49% 50%, #ffd5ae58, transparent 100%); }
 .solar-daybreak { position: absolute; inset: 0; opacity: var(--daybreak, 0); background: radial-gradient(circle, #fffefbc4 0%, #e9f1ff93 4%, #d4e1fc5e 9%, #b4c6e332 18%, transparent 36%), radial-gradient(ellipse 54% 48% at 46% 49%, #9eb1cc44, transparent 98%); }
 .orbital-haze { position: absolute; inset: 0; pointer-events: none; opacity: var(--orbital-haze, 0); background: radial-gradient(ellipse 45% 65% at var(--solar-x, 34%) 46%, #b6bed32c, #97a5c119 46%, transparent 100%), radial-gradient(ellipse 55% 76% at 15% 55%, #8e9cb41d, transparent 100%); }
+
+.imagery-credit {
+  position: absolute;
+  z-index: 2;
+  right: 24px;
+  bottom: calc(var(--frame-block) + var(--readout-height) + 14px);
+  max-width: 65%;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #030918b8;
+  color: #d8e4f8;
+  font-size: 10px;
+  line-height: 1.4;
+}
+@media (max-width: 899px) {
+  .imagery-credit { bottom: 66px; right: 12px; max-width: 58%; font-size: 9px; }
+}
+.imagery-credit { text-decoration: none; }
+.imagery-credit:hover { text-decoration: underline; }
+.explore.opening .imagery-credit {
+  position: fixed;
+  left: 16px;
+  right: auto;
+  bottom: 16px;
+  max-width: calc(100% - 220px);
+  padding: 4px 6px;
+  background: #03091866;
+  color: #bac5d8;
+  font-size: 9px;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .explore.opening .imagery-credit {
+    left: 12px;
+    bottom: 12px;
+    max-width: calc(100% - 170px);
+    font-size: 8px;
+  }
+}
+/* Reach the dashboard viewport before handing the camera to OrbitControls. */
+.opening .globe {
+  inset: 0
+    calc(var(--frame-inline) * var(--handoff-progress, 0))
+    0
+    calc((var(--frame-inline) + var(--catalog-width) + 24px) * var(--handoff-progress, 0));
+}
+@media (max-width: 899px) {
+  .opening .globe {
+    inset: calc(12px * var(--handoff-progress, 0)) calc(12px * var(--handoff-progress, 0)) auto;
+    height: calc(100svh + (max(45svh, 300px) - 100svh) * var(--handoff-progress, 0));
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .explore:not(.opening) .atlas-grid,
+  .explore:not(.opening) .console-readouts,
+  .explore:not(.opening) .map-heading,
+  .explore:not(.opening) .map-legend,
+  .console-frame {
+    animation: dashboard-reveal 240ms ease-out both;
+  }
+  @keyframes dashboard-reveal {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+}

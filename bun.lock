@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "tsumi-atlas",
+      "name": "tzumy-atlas",
       "dependencies": {
         "gsap": "^3.13.0",
         "react": "^19.0.0",

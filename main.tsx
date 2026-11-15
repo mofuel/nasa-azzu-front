@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import gsap from 'gsap'
 import './style.css'
+import { satelliteLayer } from './satellite-layer'
 
 type Site = { id: string; name: string; lat: number; lon: number; coverage: string }
 type Comparison = { id: string; label: string; variable: string; reference: string }
@@ -200,11 +201,11 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     controls.enabled = false
     controls.enablePan = false
     controls.enableZoom = true
-    controls.minDistance = 1.3
+    controls.minDistance = 1.0001
     controls.maxDistance = 8
     controls.enableDamping = false
     controls.rotateSpeed = .65
-    controls.autoRotateSpeed = .20
+    controls.autoRotateSpeed = -.20
     const ambient = new THREE.AmbientLight(0xaac8ff, .85)
     scene.add(ambient)
     const sun = new THREE.DirectionalLight(0xffecd4, 2.5)
@@ -261,6 +262,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     }
     const earth = new THREE.Mesh(geometry, material)
     scene.add(earth)
+    const satellite = satelliteLayer(scene, camera, renderer)
     const halo = new THREE.ShaderMaterial({
       side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: { strength: { value: .67 }, atlasLighting: surface },
@@ -429,11 +431,13 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       camera.updateProjectionMatrix()
     }
 
+    let repaintAfterResize: (() => void) | undefined
     function resizeViewport() {
       camera.aspect = el.clientWidth / Math.max(el.clientHeight, 1)
       if (controls.enabled) fitInteractiveGlobe()
       else camera.updateProjectionMatrix()
       renderer.setSize(el.clientWidth, el.clientHeight)
+      repaintAfterResize?.()
     }
     resizeViewport()
     const size = new ResizeObserver(resizeViewport)
@@ -524,6 +528,8 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       .to(shot, { light: .16, duration: .5, ease: 'none' }, 1.5)
       .to(shot, { shadow: -8, duration: .78, ease: 'sine.inOut' }, 3.3)
       .to(shot, { light: .65, settle: 1, duration: .85, ease: 'sine.out' }, 4)
+      .to(el, {'--handoff-progress': 1, duration: .9, ease: 'sine.inOut'}, INTRO_END - .9)
+      .to(el.querySelector('.imagery-credit'), {autoAlpha: opening ? 0 : 1, duration: .25, ease: 'sine.out'}, INTRO_END - .4)
       .call(() => finish.current?.(), [], INTRO_END)
     if (cinematic) {
       controls.enabled = false
@@ -534,14 +540,23 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     }
     let frame = 0
     let previousFrame = performance.now()
+    const paint = () => {
+      satellite.update(cinematic ? THREE.MathUtils.smoothstep(intro.time(), 4.4, INTRO_END) : 1, sun, ambient.intensity)
+      updatePins()
+      renderer.render(scene, camera)
+    }
+    // Resizing clears the WebGL buffer; repaint before the browser composites it.
+    repaintAfterResize = () => {
+      if (cinematic) drawShot()
+      paint()
+    }
     const render = () => {
       const now = performance.now()
       const delta = Math.min((now - previousFrame) / 1000, .05)
       previousFrame = now
       if (cinematic) drawShot()
       controls.update(delta)
-      updatePins()
-      renderer.render(scene, camera)
+      paint()
       frame = requestAnimationFrame(render)
     }
     render()
@@ -560,6 +575,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       controls.removeEventListener('start', interrupt)
       controls.dispose()
       for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat, selectedPinMat]) asset.dispose()
+      satellite.dispose()
       renderer.dispose()
       canvas.remove()
     }
@@ -575,6 +591,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       <button onClick={() => overview.current?.()}>Vista global</button>
       {selected && <button onClick={() => focus.current?.(selected)}>Volver al lugar</button>}
     </div>}
+    {!unavailable && <a key={opening ? "intro-credit" : "map-credit"} className="imagery-credit" href="https://maps.eox.at/" target="_blank" rel="noreferrer">Sentinel-2 2016 · EOX · Copernicus · CC BY 4.0</a>}
     {unavailable && <p className="map-unavailable" role="status">No se pudo cargar el globo. Puedes consultar los lugares y sus datos en la lista.</p>}
     {opening && <>
       <div className="orbital-haze" />
@@ -820,21 +837,21 @@ function App() {
         <div className="map-stage" ref={map} role="region" aria-label="Ubicación en el globo">
           {!showIntro && <>
             <div className="map-heading">
-              <span className="console-label">TSUMI / ATLAS TERRESTRE</span>
+              <span className="console-label">TZUMY / ATLAS TERRESTRE</span>
               <strong>{site ? siteName(site) : 'Encuentra un lugar para comparar'}</strong>
               <p>{site ? coordinates(site) : 'Arrastra para girar · selecciona un punto para acercarte'}</p>
             </div>
             <div className="map-legend" aria-label="Leyenda del mapa">
               <span><i className="earth-swatch" aria-hidden="true" /> Lugar del catálogo</span>
               <span><i className="selected-swatch" aria-hidden="true" /> Tu selección</span>
-              <small>Vista global, no imagen de detalle del terreno.</small>
+              <small>Detalle satelital progresivo al acercarse.</small>
             </div>
           </>}
         </div>
         {showIntro && <button className="skip-orbit" onClick={() => setShowIntro(false)}>Saltar introducción</button>}
         <div className="atlas-grid" inert={showIntro}>
           <aside className="panel" aria-label="Lugares terrestres">
-            <p className="eyebrow">TSUMI · ATLAS</p>
+            <p className="eyebrow">TZUMY · ATLAS</p>
             <h1>Análogos terrestres</h1>
             <p>Explora lugares de la Tierra y compara su relieve con regiones de la Luna o Marte.</p>
             <SearchActivity />
