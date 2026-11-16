@@ -798,7 +798,7 @@ function App() {
   const visibleSites = sites.filter(entry => !entry.id.startsWith('T~') || bodyFilter === 'todos' || !!entry.zone?.bodies?.includes(bodyFilter))
   const hasMars = sites.some(entry => entry.zone?.bodies?.includes('marte'))
   // Panels take the colour of the body being compared: lunar grey, or reddish only for Mars.
-  const activeBody: Body | undefined = choice ? (referenceBody(choice.reference) === t("Marte") ? 'marte' : 'luna')
+  const activeBody: Body | undefined = choice ? (referenceBody(choice.reference) === 'Marte' ? 'marte' : 'luna')
     : site?.zone?.bodies?.length === 1 ? site.zone.bodies[0] : undefined
 
   useEffect(() => {

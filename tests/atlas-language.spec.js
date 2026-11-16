@@ -66,3 +66,30 @@ test('catalog errors and retry controls follow the selected language', async ({p
   await expect(page.locator('[role=alert]')).toContainText('No se pudo cargar la lista de lugares. La API respondió con el código 503');
   await expect(page.getByRole('button',{name:'Reintentar catálogo'})).toBeVisible();
 });
+
+test('Mars keeps its panel colour and API selection when changing language', async ({page}) => {
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.route('**/tiles.maps.eox.at/**',r=>r.abort());
+  const marsSite = {...site, id:site.id+'~marte',
+    zone:{...site.zone,bodies:['marte'],references:['Gale · base del monte Sharp']}};
+  const marsComparison = {...comparisons[0],id:'MAR-GALE-MONTE-SHARP~pendiente_mediana',
+    reference:'Marte · Gale · base del monte Sharp'};
+  await page.route('**/api/**',r=>{
+    const path=new URL(r.request().url()).pathname;
+    if(path.endsWith('/sites')) return r.fulfill({json:[marsSite]});
+    if(path.endsWith('/comparisons')) return r.fulfill({json:[...comparisons,marsComparison]});
+    return r.fulfill({status:503});
+  });
+  await page.goto('/');
+  await page.locator('.site-button').first().click();
+  await expect(page.locator('#reference')).toHaveValue(marsComparison.reference);
+  await expect(page.locator('main')).toHaveAttribute('data-body','marte');
+  await expect(page.locator('#reference optgroup[label="Mars"]')).toHaveCount(1);
+  await page.locator('.language-toggle').click();
+  await expect(page.locator('main')).toHaveAttribute('data-body','marte');
+  await expect(page.locator('#reference')).toHaveValue(marsComparison.reference);
+  await page.locator('#reference').selectOption(comparisons[0].reference);
+  await expect(page.locator('main')).toHaveAttribute('data-body','luna');
+  await page.locator('.language-toggle').click();
+  await expect(page.locator('main')).toHaveAttribute('data-body','luna');
+});

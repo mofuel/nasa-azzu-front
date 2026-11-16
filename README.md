@@ -92,7 +92,7 @@ Con las dependencias instaladas, ejecuta:
 
 También se pueden ejecutar `bun run build` y `bun run test` con las dependencias instaladas.
 
-Playwright inicia Vite y ejecuta 26 comprobaciones, repartidas entre escritorio y móvil:
+Playwright inicia Vite y ejecuta 32 comprobaciones, repartidas entre escritorio y móvil:
 giro y arrastre, movimiento reducido, centrado y zoom repetible, selección de variables,
 leyendas, cambio de referencia, resultados sin datos, errores y reintentos, actividad, zonas
 candidatas, distinción Luna/Marte, contexto NASA, transición de la introducción y crédito de las imágenes.
