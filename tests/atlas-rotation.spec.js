@@ -4,6 +4,8 @@ import {test, expect} from '@playwright/test';
 const atlasURL = process.env.ATLAS_URL || '/';
 
 async function openAtlas(page, reducedMotion = 'no-preference') {
+  await page.addInitScript(() => localStorage.setItem('azzu-language', 'es'));
+
   // UI fixtures do not depend on downloads from the satellite provider.
   await page.route('**/tiles.maps.eox.at/**', route => route.abort());
   await page.emulateMedia({reducedMotion});
@@ -13,7 +15,7 @@ async function openAtlas(page, reducedMotion = 'no-preference') {
     const source = await response.text();
     const instrumented = source.replaceAll(
       /renderer\.render\(scene, camera\)/g,
-      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping, pins: pins.children.map(pin => ({id: pin.userData.site.id, selected: pin.material === selectedPinMat, mars: pin.material === marsPinMat, screen: pin.position.clone().project(camera).toArray(), visible: pin.visible}))}, renderer.render(scene, camera))',
+      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping, pins: pins.children.map(pin => ({id: pin.userData.site.id, selected: pin.material === selectedPinMat, mars: pin.material === marsPinMat, scale: pin.scale.x, distance: camera.position.distanceTo(pin.position), renderOrder: pin.renderOrder, screen: pin.position.clone().project(camera).toArray(), visible: pin.visible}))}, renderer.render(scene, camera))',
     );
     expect(instrumented).not.toBe(source);
     await route.fulfill({response, body: instrumented});
@@ -139,6 +141,14 @@ test('selecting a place centers and zooms in, highlights it and can be repeated'
   const alignment = (await camera(page)).reduce((sum, value, i) => sum + value / 1.8 * direction[i], 0);
   expect(alignment).toBeGreaterThan(.9999);
   expect(await page.evaluate(() => window.__atlasProbe.pins.filter(p => p.selected).map(p => p.id))).toEqual([sites[1].id]);
+  await expect.poll(() => page.evaluate(() => {
+    const selected = window.__atlasProbe.pins.find(pin => pin.selected);
+    return selected.scale / selected.distance;
+  })).toBeCloseTo(.03, 5);
+  expect(await page.evaluate(() => {
+    const pins = window.__atlasProbe.pins;
+    return pins.filter(pin => !pin.selected).every(pin => pin.renderOrder < pins.find(pin => pin.selected).renderOrder);
+  })).toBe(true);
   await page.getByRole('button', {name: 'Vista global', exact: true}).click();
   await expect.poll(async () => Math.hypot(...await camera(page))).toBeGreaterThan(3);
   await page.getByRole('button', {name: 'Candidato Arizona', exact: true}).click();

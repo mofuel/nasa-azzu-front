@@ -62,7 +62,7 @@ El contrato existente no cambia.
 ## Navegación del globo
 
 Seleccionar un lugar, desde la lista o desde un marcador, detiene el giro, centra la cámara
-y hace zoom. El punto seleccionado se muestra más grande y en ámbar; los demás, en azul.
+y hace zoom. El punto seleccionado conserva su tamaño, se muestra en ámbar y se dibuja por encima de los demás marcadores.
 Hay controles para acercar, alejar, recuperar la vista global y volver al lugar seleccionado.
 Se respeta la preferencia de movimiento reducido. En móvil, el globo, el catálogo y la
 comparación se apilan sin superponerse.
@@ -114,3 +114,6 @@ durante la introducción. Son un fondo de visualización; no sustituyen los dato
 - Servicio y licencia por capa: https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml
 - Licencia: https://creativecommons.org/licenses/by/4.0/
 - Información del mosaico: https://www.eox.at/2025/03/sentinel-2-cloudless-2024/
+## Idiomas
+
+La interfaz inicia en inglés. El botón English / Español, a la izquierda de Vista global, cambia el idioma sin reiniciar el globo ni perder la selección. La preferencia se guarda localmente. Se traducen las etiquetas y plantillas del contrato de la API; los identificadores, las mediciones y los nombres propios se conservan.
