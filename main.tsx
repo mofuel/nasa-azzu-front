@@ -217,7 +217,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
     controls.minDistance = 1.0001
     controls.maxDistance = 8
     controls.enableDamping = false
-    controls.rotateSpeed = .65
+    controls.rotateSpeed = .4
     controls.autoRotateSpeed = -.20
     const ambient = new THREE.AmbientLight(0xaac8ff, .85)
     scene.add(ambient)
@@ -518,7 +518,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
         if (!pin.visible) continue
         pin.quaternion.copy(camera.quaternion)
         const limbScale = THREE.MathUtils.smoothstep(facing, 1.01, 1.14)
-        pin.scale.setScalar(camera.position.distanceTo(pin.position) * .03 * limbScale * (pin.userData.site.id === selectedSite.current?.id ? 2 : 1))
+        pin.scale.setScalar(camera.position.distanceTo(pin.position) * .03 * limbScale)
       }
     }
 
@@ -585,6 +585,8 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       intro.kill()
       finish.current = null
       focus.current = null
+      // Reduce drag sensitivity near the surface for more precise navigation.
+      controls.rotateSpeed = .4 * THREE.MathUtils.clamp(camera.position.length() - 1, .02, 1)
       markers.current = null
       zoom.current = null
       overview.current = null
