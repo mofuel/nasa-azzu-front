@@ -25,6 +25,10 @@ no interpreta un contenedor encendido como búsqueda activa ni promete un domini
 El contexto NASA tiene un apartado propio con NDVI/LST, unidades, meses válidos y límites,
 incluidos los valores sin dato, sin inventar una comparación térmica planetaria.
 
+El catálogo separa sitios registrados, **zonas candidatas** (3 o más teselas candidatas
+cercanas que la API agrupa por distancia) y candidatos aislados. Cada zona se marca y compara
+por su mejor tesela; el área suma solo las teselas que cumplen. Agrupar no valida la zona.
+
 ## Desarrollo local
 
 Requiere Node.js 20.19+ o 22.12+.
@@ -54,7 +58,9 @@ Hay controles para acercar, alejar, recuperar la vista global y volver al lugar 
 Se respeta la preferencia de movimiento reducido. En móvil, el globo, el catálogo y la
 comparación se apilan sin superponerse.
 
-La textura terrestre es de vista global: **el zoom no aporta imágenes de detalle de la tesela**.
+Al acercarse, el globo carga mosaicos Sentinel-2 de 2016 con más detalle (ver «Imágenes
+satelitales del globo»). Son contexto visual: **no son los datos que se comparan** ni muestran
+el estado actual del terreno.
 
 Consulta el [análisis de la referencia y el contrato propuesto de la API](ANALISIS-FRONTEND.md).
 
@@ -77,9 +83,10 @@ Con las dependencias instaladas, ejecuta:
 
 También se pueden ejecutar `bun run build` y `bun run test` con las dependencias instaladas.
 
-Playwright inicia Vite y ejecuta 20 comprobaciones, repartidas entre escritorio y móvil:
+Playwright inicia Vite y ejecuta 24 comprobaciones, repartidas entre escritorio y móvil:
 giro y arrastre, movimiento reducido, centrado y zoom repetible, selección de variables,
-leyendas, cambio de referencia, resultados sin datos, errores y reintentos, actividad y contexto NASA.
+leyendas, cambio de referencia, resultados sin datos, errores y reintentos, actividad, zonas
+candidatas, contexto NASA, transición de la introducción y crédito de las imágenes.
 Las mediciones de las pruebas son fixtures interceptadas, no resultados científicos.
 
 ## Imágenes satelitales del globo

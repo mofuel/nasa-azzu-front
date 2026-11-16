@@ -6,13 +6,15 @@ import gsap from 'gsap'
 import './style.css'
 import { satelliteLayer } from './satellite-layer'
 
-type Site = { id: string; name: string; lat: number; lon: number; coverage: string }
+type Zone = { tiles: number; areaKm2: number; isZone: boolean; references: string[]; searchArea: string; known: boolean; nearestKnownSite: string | null; nearestKnownKm: number | null; bbox: [number, number, number, number] }
+type Site = { id: string; name: string; lat: number; lon: number; coverage: string; zone?: Zone }
 type Comparison = { id: string; label: string; variable: string; reference: string }
 type EarthContext = { months: string[]; resolutionDegrees: number; ndviMax: number | null; ndviValidMonths: number | null; lstDayMaxK: number | null; lstDayValidMonths: number | null; lstNightMinK: number | null; lstNightValidMonths: number | null; ndviThreshold: number; passesNdviScreen: boolean }
 type Result = { earthValue: number; referenceValue: number; unit: string; difference: number; scale: string; limitation: string; sources: { title: string; url: string }[]; earthContext?: EarthContext | null }
 type Analysis = { id: string; status: 'pending' | 'running' | 'completed' | 'insufficient_data' | 'failed'; result?: Result; message?: string }
 type SearchState = {
   celdas: Record<string, number>; teselas: number; teselas_candidatas: number; ultima_actualizacion: string | null;
+  zonas_candidatas?: number; zonas_lejos_de_analogos_conocidos?: number; candidatas_aisladas?: number;
   trabajadores: { estado: string; celda_id: string | null; senal_reciente: boolean; actualizado_utc: string; celdas_elegibles: number | null }[];
   contexto_nasa: { meses: string[]; version_qa: string; umbral_ndvi: number } | null
 }
@@ -97,6 +99,7 @@ function SearchActivity() {
       <details><summary>Actividad y datos NASA</summary>
         <p>{number(state.teselas)} registros de relieve a distintas resoluciones; no son lugares únicos.</p>
         <p>{number(state.teselas_candidatas)} teselas candidatas a 60 m, pendientes de revisión científica.</p>
+        {state.zonas_candidatas !== undefined && <p>Agrupadas por cercanía en {number(state.zonas_candidatas)} zonas de 3 o más teselas ({number(state.zonas_lejos_de_analogos_conocidos ?? 0)} lejos de análogos NASA conocidos) y {number(state.candidatas_aisladas ?? 0)} candidatas aisladas.</p>}
         {state.ultima_actualizacion && <p>Última celda terminada: <time dateTime={state.ultima_actualizacion}>{new Date(state.ultima_actualizacion).toLocaleString('es')}</time>.</p>}
         <p>{state.contexto_nasa ? `MODIS con control de calidad: ${state.contexto_nasa.meses.join(', ')}.` : 'Contexto NASA MODIS aún no disponible.'}</p>
         {!recent.length && <p>No podemos confirmar que el trabajador siga activo; esto no demuestra que esté detenido.</p>}
@@ -861,10 +864,12 @@ function App() {
             {!loadingCatalog && !sites.length && !catalogError && <p>No hay lugares disponibles todavía.</p>}
             <div className="site-list" aria-label="Catálogo de sitios">
               {[
-                { name: 'Sitios registrados', candidate: false },
-                { name: 'Candidatos detectados', candidate: true }
+                { name: 'Sitios registrados', kind: 'site' },
+                { name: 'Zonas candidatas', kind: 'zone' },
+                { name: 'Candidatos aislados', kind: 'single' }
               ].map(group => {
-                const entries = sites.filter(entry => entry.id.startsWith('T~') === group.candidate)
+                const kind = (entry: Site) => !entry.id.startsWith('T~') ? 'site' : entry.zone?.isZone ? 'zone' : 'single'
+                const entries = sites.filter(entry => kind(entry) === group.kind)
                 return entries.length > 0 && <div className="site-group" key={group.name}>
                   <h3>{group.name} <span>({entries.length})</span></h3>
                   {entries.map(entry => <button className="site-button" key={entry.id} aria-pressed={site?.id === entry.id} onClick={() => pick(entry)}><span>{siteName(entry)}</span><span aria-hidden="true">↗</span></button>)}
@@ -881,6 +886,7 @@ function App() {
               analysis={analysis} onCompare={analyze} onChoice={selectComparison} onRetryChoices={() => setChoiceAttempt(n => n + 1)} />
             <details className="catalog-legend"><summary>¿Qué significa «candidato»?</summary>
               <p>«3/3» indica que las tres medidas de relieve están dentro del rango de la referencia, no un 100 % de similitud. Es una preselección para investigar, no un análogo confirmado ni un sitio aprobado por NASA.</p>
+              <p>Una zona agrupa teselas candidatas de 3 km cuyos centros están a pocos kilómetros entre sí. Se muestra su mejor tesela; el área suma las teselas que cumplen, no todo el entorno.</p>
               <p>Los sitios registrados también incluyen referencias y controles; estar en la lista no implica validación.</p>
             </details>
           </aside>

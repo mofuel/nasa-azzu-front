@@ -81,7 +81,10 @@ test('Earth remains stationary when reduced motion is enabled', async ({page}) =
 
 const sites = [
   {id: 'TIE-CINDER-LAKE', name: 'TIE-CINDER-LAKE', lat: 35.32, lon: -111.52, coverage: 'Sitio registrado para comparación'},
-  {id: 'T~N35W112~0~0', name: 'Candidato Arizona', lat: 35.58, lon: -111.63, coverage: 'Candidato detectado · 3/3'}
+  {id: 'T~N35W112~0~0', name: 'Candidato Arizona', lat: 35.58, lon: -111.63, coverage: 'Candidato detectado · 3/3'},
+  {id: 'T~N19E018~4~7', name: 'Zona Tibesti', lat: 19.79, lon: 18.47, coverage: 'Zona candidata · 57 teselas (513,0 km²)',
+    zone: {tiles: 57, areaKm2: 513, isZone: true, references: ['Malapert', 'Mons Mouton'], searchArea: 'Exploración: Tibesti',
+      known: false, nearestKnownSite: 'Cinder Lake', nearestKnownKm: 11900, bbox: [18.2, 19.6, 18.7, 20]}}
 ];
 const variables = [
   ['pendiente_mediana', 'Pendiente mediana'], ['pendiente_p90', 'Pendiente P90'], ['relieve', 'Relieve P95–P5']
@@ -103,6 +106,7 @@ async function mockApi(page, options = {}) {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/search/status')) return route.fulfill({json: options.searchState ?? {
       celdas: {hecha: 27, pendiente: 5, en_curso: 1}, teselas: 58978, teselas_candidatas: 32,
+      zonas_candidatas: 4, zonas_lejos_de_analogos_conocidos: 3, candidatas_aisladas: 9,
       ultima_actualizacion: '2026-11-15T23:00:00Z',
       trabajadores: [{estado: 'procesando', celda_id: 'N25E039', senal_reciente: true, actualizado_utc: '2026-11-15T23:00:00Z', celdas_elegibles: 4145}],
       contexto_nasa: {meses: ['2025-01', '2025-07'], version_qa: 'modis-qa-v2', umbral_ndvi: .3}
@@ -240,6 +244,10 @@ test('search activity distinguishes real processing from a stale signal', async 
   await activity.getByText('Actividad y datos NASA', {exact: true}).click();
   await expect(activity).toContainText('no son lugares únicos');
   await expect(activity).toContainText('no promete descubrimientos infinitos');
+  await expect(activity).toContainText('4 zonas de 3 o más teselas (3 lejos de análogos NASA conocidos) y 9 candidatas aisladas');
+  const catalog = page.getByLabel('Catálogo de sitios');
+  await expect(catalog.getByRole('heading', {name: 'Zonas candidatas (1)'})).toBeVisible();
+  await expect(catalog.getByRole('heading', {name: 'Candidatos aislados (1)'})).toBeVisible();
   await page.route('**/api/search/status', route => route.fulfill({json: {
     celdas: {hecha: 27}, teselas: 58978, teselas_candidatas: 0, ultima_actualizacion: null,
     trabajadores: [{estado: 'procesando', celda_id: 'N25E039', senal_reciente: false, actualizado_utc: '2026-11-15T21:00:00Z', celdas_elegibles: 4145}],
