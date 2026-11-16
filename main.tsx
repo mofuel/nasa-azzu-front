@@ -605,15 +605,19 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
   useEffect(() => { markers.current?.(sites) }, [sites])
   useEffect(() => { if (selected) focus.current?.(selected) }, [selected])
   useLayoutEffect(() => { if (!opening) finish.current?.() }, [opening])
+  const imageryCredit = !unavailable && <a key={opening ? "intro-credit" : "map-credit"} className="imagery-credit" href="https://maps.eox.at/" target="_blank" rel="noreferrer">Sentinel-2 2016 · EOX · Copernicus · CC BY 4.0</a>
   return <div className="globe" ref={host}>
     {unavailable && <div className="globe-fallback" />}
     {!opening && !unavailable && <div className="globe-tools" aria-label="Controles del globo">
+      <div className="globe-actions">
       <button onClick={() => zoom.current?.(.8)} aria-label="Acercar">+</button>
       <button onClick={() => zoom.current?.(1.25)} aria-label="Alejar">−</button>
       <button onClick={() => overview.current?.()}>Vista global</button>
       {selected && <button onClick={() => focus.current?.(selected)}>Volver al lugar</button>}
+      </div>
+      {imageryCredit}
     </div>}
-    {!unavailable && <a key={opening ? "intro-credit" : "map-credit"} className="imagery-credit" href="https://maps.eox.at/" target="_blank" rel="noreferrer">Sentinel-2 2016 · EOX · Copernicus · CC BY 4.0</a>}
+    {opening && imageryCredit}
     {unavailable && <p className="map-unavailable" role="status">No se pudo cargar el globo. Puedes consultar los lugares y sus datos en la lista.</p>}
     {opening && <>
       <div className="orbital-haze" />
@@ -869,7 +873,6 @@ function App() {
         <div className="map-stage" ref={map} role="region" aria-label="Ubicación en el globo">
           {!showIntro && <>
             <div className="map-heading">
-              <span className="console-label">TZUMY / ATLAS TERRESTRE</span>
               <strong>{site ? siteName(site) : 'Encuentra un lugar para comparar'}</strong>
               <p>{site ? coordinates(site) : 'Arrastra para girar · selecciona un punto para acercarte'}</p>
             </div>
@@ -884,7 +887,7 @@ function App() {
         {showIntro && <button className="skip-orbit" onClick={() => setShowIntro(false)}>Saltar introducción</button>}
         <div className="atlas-grid" inert={showIntro}>
           <aside className="panel" aria-label="Lugares terrestres">
-            <p className="eyebrow">TZUMY · ATLAS</p>
+            <div className="atlas-brand-row"><img className="atlas-brand" src={import.meta.env.BASE_URL + 'azzu-logo.svg'} alt="AZZU" width="984" height="256" /><img className="atlas-companion-brand" src={import.meta.env.BASE_URL + 'logo-nasa-blanco.svg'} alt="Logo de exploración espacial" /></div>
             <h1>Análogos terrestres</h1>
             <p>Explora lugares de la Tierra y compara su relieve con regiones de la Luna o Marte.</p>
             <SearchActivity />

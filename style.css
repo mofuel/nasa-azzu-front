@@ -334,3 +334,17 @@ select { max-width: 100%; width: 100%; padding: 10px; border: 1px solid #ffffff5
     to { opacity: 1; }
   }
 }
+.atlas-brand { display: block; width: 128px; max-width: 100%; height: auto; margin: 4px 0 8px; flex-shrink: 0; }
+
+/* Keep attribution inside the map, in its own row below the controls. */
+.globe-tools { left: 24px; bottom: calc(var(--frame-block) + var(--readout-height) + 36px); flex-direction: column; align-items: flex-end; gap: 8px; }
+.globe-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.globe-tools .imagery-credit { position: static; max-width: 100%; text-align: right; }
+@media (max-width: 899px) {
+  .globe-tools { left: 12px; right: 12px; bottom: 12px; }
+  .map-legend { top: 84px; bottom: auto; }
+}
+
+.atlas-brand-row { display: flex; align-items: center; gap: 16px; margin: 4px 0 8px; flex-shrink: 0; }
+.atlas-brand-row .atlas-brand { margin: 0; width: min(128px, 65%); }
+.atlas-companion-brand { display: block; width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; transform: translateY(-3px); }
