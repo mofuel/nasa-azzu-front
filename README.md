@@ -29,6 +29,15 @@ El catálogo separa sitios registrados, **zonas candidatas** (3 o más teselas c
 cercanas que la API agrupa por distancia) y candidatos aislados. Cada zona se marca y compara
 por su mejor tesela; el área suma solo las teselas que cumplen. Agrupar no valida la zona.
 
+Los candidatos se distinguen por el cuerpo frente al que se detectaron: etiqueta «Luna» o
+«Marte» en el catálogo, marcador rojo en el globo para los solo marcianos y un filtro
+Luna/Marte que afecta a la lista y al globo. El selector de comparación agrupa las regiones
+por cuerpo y abre la del cuerpo en que se encontró el candidato. Marte usa la banda P25–P75.
+Los paneles toman un tono gris lunar al comparar con la Luna y rojizo al comparar con Marte.
+
+La tarjeta «Ubicación» muestra distrito, provincia y país (caché de OpenStreetMap/Nominatim en la
+API) junto a las coordenadas. Si aún no se ha consultado o el punto está en el mar, lo dice.
+
 ## Desarrollo local
 
 Requiere Node.js 20.19+ o 22.12+.
@@ -83,10 +92,10 @@ Con las dependencias instaladas, ejecuta:
 
 También se pueden ejecutar `bun run build` y `bun run test` con las dependencias instaladas.
 
-Playwright inicia Vite y ejecuta 24 comprobaciones, repartidas entre escritorio y móvil:
+Playwright inicia Vite y ejecuta 26 comprobaciones, repartidas entre escritorio y móvil:
 giro y arrastre, movimiento reducido, centrado y zoom repetible, selección de variables,
 leyendas, cambio de referencia, resultados sin datos, errores y reintentos, actividad, zonas
-candidatas, contexto NASA, transición de la introducción y crédito de las imágenes.
+candidatas, distinción Luna/Marte, contexto NASA, transición de la introducción y crédito de las imágenes.
 Las mediciones de las pruebas son fixtures interceptadas, no resultados científicos.
 
 ## Imágenes satelitales del globo

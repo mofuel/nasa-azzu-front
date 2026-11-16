@@ -13,7 +13,7 @@ async function openAtlas(page, reducedMotion = 'no-preference') {
     const source = await response.text();
     const instrumented = source.replaceAll(
       /renderer\.render\(scene, camera\)/g,
-      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping, pins: pins.children.map(pin => ({id: pin.userData.site.id, selected: pin.material === selectedPinMat, screen: pin.position.clone().project(camera).toArray(), visible: pin.visible}))}, renderer.render(scene, camera))',
+      '(window.__atlasProbe = {position: camera.position.toArray(), autoRotate: controls.autoRotate, damping: controls.enableDamping, pins: pins.children.map(pin => ({id: pin.userData.site.id, selected: pin.material === selectedPinMat, mars: pin.material === marsPinMat, screen: pin.position.clone().project(camera).toArray(), visible: pin.visible}))}, renderer.render(scene, camera))',
     );
     expect(instrumented).not.toBe(source);
     await route.fulfill({response, body: instrumented});
@@ -80,18 +80,22 @@ test('Earth remains stationary when reduced motion is enabled', async ({page}) =
 });
 
 const sites = [
-  {id: 'TIE-CINDER-LAKE', name: 'TIE-CINDER-LAKE', lat: 35.32, lon: -111.52, coverage: 'Sitio registrado para comparación'},
+  {id: 'TIE-CINDER-LAKE', name: 'TIE-CINDER-LAKE', lat: 35.32, lon: -111.52, coverage: 'Sitio registrado para comparación',
+    location: {status: 'ok', country: 'Estados Unidos', province: 'Arizona', district: 'Condado de Coconino', source: '© OpenStreetMap (Nominatim)'}},
   {id: 'T~N35W112~0~0', name: 'Candidato Arizona', lat: 35.58, lon: -111.63, coverage: 'Candidato detectado · 3/3'},
   {id: 'T~N19E018~4~7', name: 'Zona Tibesti', lat: 19.79, lon: 18.47, coverage: 'Zona candidata · 57 teselas (513,0 km²)',
-    zone: {tiles: 57, areaKm2: 513, isZone: true, references: ['Malapert', 'Mons Mouton'], searchArea: 'Exploración: Tibesti',
-      known: false, nearestKnownSite: 'Cinder Lake', nearestKnownKm: 11900, bbox: [18.2, 19.6, 18.7, 20]}}
+    zone: {tiles: 57, areaKm2: 513, isZone: true, references: ['Malapert', 'Mons Mouton'], bodies: ['luna'], searchArea: 'Exploración: Tibesti',
+      known: false, nearestKnownSite: 'Cinder Lake', nearestKnownKm: 11900, bbox: [18.2, 19.6, 18.7, 20]}},
+  {id: 'T~N38W070~2~5', name: 'Zona Neuquén', lat: -37.8, lon: -69.9, coverage: 'Zona candidata · 6 teselas (54,0 km²) · 3/3 frente a Gale · base del monte Sharp (Marte)',
+    zone: {tiles: 6, areaKm2: 54, isZone: true, references: ['Gale · base del monte Sharp'], bodies: ['marte'], searchArea: 'Exploración ampliada',
+      known: false, nearestKnownSite: 'Death Valley', nearestKnownKm: 9000, bbox: [-70, -37.9, -69.8, -37.7]}}
 ];
 const variables = [
   ['pendiente_mediana', 'Pendiente mediana'], ['pendiente_p90', 'Pendiente P90'], ['relieve', 'Relieve P95–P5']
 ];
-const choices = ['Malapert', 'Mons Mouton'].flatMap(ref => variables.map(([key, name]) => ({
-  id: ref + '~' + key, label: ref + ' · ' + name, variable: name, reference: 'Luna · ' + ref
-})));
+const choices = [['Luna', 'Malapert'], ['Luna', 'Mons Mouton'], ['Marte', 'Gale · aterrizaje de Curiosity'],
+  ['Marte', 'Gale · base del monte Sharp']].flatMap(([body, ref]) =>
+  variables.map(([key, name]) => ({id: ref + '~' + key, label: ref + ' · ' + name, variable: name, reference: body + ' · ' + ref})));
 function completed(body) {
   const relief = body.comparisonId.endsWith('~relieve');
   return {id: 'prueba', status: 'completed', result: {
@@ -246,7 +250,7 @@ test('search activity distinguishes real processing from a stale signal', async 
   await expect(activity).toContainText('no promete descubrimientos infinitos');
   await expect(activity).toContainText('4 zonas de 3 o más teselas (3 lejos de análogos NASA conocidos) y 9 candidatas aisladas');
   const catalog = page.getByLabel('Catálogo de sitios');
-  await expect(catalog.getByRole('heading', {name: 'Zonas candidatas (1)'})).toBeVisible();
+  await expect(catalog.getByRole('heading', {name: 'Zonas candidatas (2)'})).toBeVisible();
   await expect(catalog.getByRole('heading', {name: 'Candidatos aislados (1)'})).toBeVisible();
   await page.route('**/api/search/status', route => route.fulfill({json: {
     celdas: {hecha: 27}, teselas: 58978, teselas_candidatas: 0, ultima_actualizacion: null,
@@ -256,6 +260,38 @@ test('search activity distinguishes real processing from a stale signal', async 
   await page.reload();
   await expect(activity).toContainText('Sin señal reciente del trabajador');
   await expect(activity.locator('.activity-dot.active')).toHaveCount(0);
+});
+
+test('lunar and martian candidates are told apart in the list, globe and comparison', async ({page}) => {
+  await mockApi(page);
+  await openAtlas(page, 'reduce');
+  const catalog = page.getByLabel('Catálogo de sitios');
+  const mars = catalog.getByRole('button', {name: /^Zona Neuquén/});
+  await expect(mars).toContainText('Marte');
+  await expect(catalog.getByRole('button', {name: /^Zona Tibesti/})).toContainText('Luna');
+  // Globe: only the Mars-only candidate uses the martian marker.
+  await expect.poll(() => page.evaluate(() => window.__atlasProbe.pins.filter(p => p.mars).map(p => p.id))).toEqual(['T~N38W070~2~5']);
+  await page.getByRole('radio', {name: 'Marte', exact: true}).check();
+  await expect(catalog.getByRole('button', {name: /^Zona Tibesti/})).toHaveCount(0);
+  await expect(catalog.getByRole('button', {name: 'Cinder Lake', exact: true})).toBeVisible();  // registered sites stay
+  await expect.poll(() => page.evaluate(() => window.__atlasProbe.pins.map(p => p.id).sort())).toEqual(['TIE-CINDER-LAKE', 'T~N38W070~2~5']);
+  await mars.click();
+  const select = page.getByLabel('2. Elige una región');
+  // Opens with the reference it was found against, not merely the first martian one.
+  await expect(select).toHaveValue('Marte · Gale · base del monte Sharp');
+  await expect(select.locator('optgroup')).toHaveCount(2);
+  expect(await select.locator('optgroup').evaluateAll(groups => groups.map(g => g.label))).toEqual(['Luna', 'Marte']);
+  // Panels turn reddish while comparing against Mars and lunar grey against the Moon.
+  await expect(page.locator('main')).toHaveAttribute('data-body', 'marte');
+  await select.selectOption('Luna · Malapert');
+  await expect(page.locator('main')).toHaveAttribute('data-body', 'luna');
+  // A place without cached administrative data says so instead of guessing.
+  await expect(page.locator('.console-place')).toContainText('Ubicación administrativa pendiente de consulta');
+  await page.getByRole('radio', {name: 'Luna y Marte'}).check();
+  await expect(catalog.getByRole('button', {name: /^Zona Tibesti/})).toBeVisible();
+  await catalog.getByRole('button', {name: 'Cinder Lake', exact: true}).click();
+  await expect(page.locator('.console-place')).toContainText('Condado de Coconino, Arizona, Estados Unidos');
+  await expect(page.locator('.site-detail .place')).toHaveText('Condado de Coconino, Arizona, Estados Unidos');
 });
 
 test('NASA context has its own units, missing data and explicit limits', async ({page}) => {

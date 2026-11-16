@@ -6,8 +6,10 @@ import gsap from 'gsap'
 import './style.css'
 import { satelliteLayer } from './satellite-layer'
 
-type Zone = { tiles: number; areaKm2: number; isZone: boolean; references: string[]; searchArea: string; known: boolean; nearestKnownSite: string | null; nearestKnownKm: number | null; bbox: [number, number, number, number] }
-type Site = { id: string; name: string; lat: number; lon: number; coverage: string; zone?: Zone }
+type Body = 'luna' | 'marte'
+type Zone = { tiles: number; areaKm2: number; isZone: boolean; references: string[]; bodies?: Body[]; searchArea: string; known: boolean; nearestKnownSite: string | null; nearestKnownKm: number | null; bbox: [number, number, number, number] }
+type Place = { status: 'ok' | 'sin_resultado'; country: string | null; province: string | null; district: string | null; source: string }
+type Site = { id: string; name: string; lat: number; lon: number; coverage: string; zone?: Zone; location?: Place | null }
 type Comparison = { id: string; label: string; variable: string; reference: string }
 type EarthContext = { months: string[]; resolutionDegrees: number; ndviMax: number | null; ndviValidMonths: number | null; lstDayMaxK: number | null; lstDayValidMonths: number | null; lstNightMinK: number | null; lstNightValidMonths: number | null; ndviThreshold: number; passesNdviScreen: boolean }
 type Result = { earthValue: number; referenceValue: number; unit: string; difference: number; scale: string; limitation: string; sources: { title: string; url: string }[]; earthContext?: EarthContext | null }
@@ -49,6 +51,14 @@ function variableGuide(choice: Comparison) {
 
 const number = (value: number) => value.toLocaleString('es', { maximumFractionDigits: 2 })
 const coordinates = (site: Site) => `${number(Math.abs(site.lat))}° ${site.lat < 0 ? 'S' : 'N'}, ${number(Math.abs(site.lon))}° ${site.lon < 0 ? 'O' : 'E'}`
+const bodyName: Record<Body, string> = { luna: 'Luna', marte: 'Marte' }
+// Administrative place from the API cache; never guessed from coordinates in the browser.
+const placeText = (site: Site) => !site.location ? 'Ubicación administrativa pendiente de consulta'
+  : site.location.status === 'sin_resultado' ? 'Sin división administrativa (mar o zona sin datos)'
+  : [site.location.district, site.location.province, site.location.country].filter(Boolean).join(', ')
+const onlyMars = (site: Site) => site.zone?.bodies?.length === 1 && site.zone.bodies[0] === 'marte'
+// Comparison references arrive as "Luna · Malapert Massif" or "Marte · Gale · …".
+const referenceBody = (reference: string) => reference.split(' · ')[0]
 const catalogNames: Record<string, string> = {
   'TIE-SFVF': 'Campo volcánico de San Francisco',
   'TIE-SP-CRATER': 'Cráter SP'
@@ -322,7 +332,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       transparent: true,
       depthWrite: false,
       depthTest: false,
-      uniforms: { reveal: { value: 1 }, highlight: { value: 0 } },
+      uniforms: { reveal: { value: 1 }, highlight: { value: 0 }, mars: { value: 0 } },
       vertexShader: `
         varying vec2 markerUv;
         void main() {
@@ -333,6 +343,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       fragmentShader: `
         uniform float reveal;
         uniform float highlight;
+        uniform float mars;
         varying vec2 markerUv;
         void main() {
           float radius = length(markerUv - 0.5);
@@ -342,19 +353,25 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
           float edge = 1.0 - smoothstep(0.39, 0.49, radius);
           float alpha = max(ring, glow) * edge * reveal;
           if (alpha < 0.01) discard;
-          vec3 color = mix(vec3(0.28, 0.46, 0.86), vec3(0.70, 0.82, 1.0), ring);
+          vec3 color = mix(mix(vec3(0.28, 0.46, 0.86), vec3(0.94, 0.40, 0.40), mars),
+                           mix(vec3(0.70, 0.82, 1.0), vec3(1.0, 0.72, 0.70), mars), ring);
           gl_FragColor = vec4(mix(color, vec3(1.0, 0.68, 0.27), highlight), alpha);
         }
       `
     })
     const selectedPinMat = pinMat.clone()
     selectedPinMat.uniforms.highlight.value = 1
+    // Candidates detected only against Mars are red; the shared reveal keeps them in the intro animation.
+    const marsPinMat = pinMat.clone()
+    marsPinMat.uniforms.reveal = pinMat.uniforms.reveal
+    marsPinMat.uniforms.mars.value = 1
+    const restingMat = (site: Site) => onlyMars(site) ? marsPinMat : pinMat
     const pins = new THREE.Group()
     scene.add(pins)
     markers.current = entries => {
       pins.clear()
       for (const site of entries) {
-        const pin = new THREE.Mesh(pinGeo, site.id === selectedSite.current?.id ? selectedPinMat : pinMat)
+        const pin = new THREE.Mesh(pinGeo, site.id === selectedSite.current?.id ? selectedPinMat : restingMat(site))
         pin.position.copy(location(site, 1.006))
         pin.renderOrder = site.id === selectedSite.current?.id ? 4 : 3
         pin.userData.site = site
@@ -368,7 +385,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       controls.autoRotate = false
       movement?.kill()
       for (const pin of pins.children) {
-        (pin as THREE.Mesh).material = pin.userData.site.id === site.id ? selectedPinMat : pinMat
+        (pin as THREE.Mesh).material = pin.userData.site.id === site.id ? selectedPinMat : restingMat(pin.userData.site)
         pin.renderOrder = pin.userData.site.id === site.id ? 4 : 3
       }
       const from = camera.position.clone().normalize()
@@ -577,7 +594,7 @@ function Globe({ sites, selected, onSelect, opening, onReady }: {
       canvas.removeEventListener('pointerup', up)
       controls.removeEventListener('start', interrupt)
       controls.dispose()
-      for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat, selectedPinMat]) asset.dispose()
+      for (const asset of [geometry, material, texture, waterMask, normalMap, halo, rimMaterial, pinGeo, pinMat, selectedPinMat, marsPinMat]) asset.dispose()
       satellite.dispose()
       renderer.dispose()
       canvas.remove()
@@ -651,7 +668,9 @@ function ComparisonControls({ site, choices, choice, loading, choiceError, analy
         const options = choices.filter(c => c.reference === event.target.value)
         onChoice((options.find(c => c.variable === choice.variable) ?? options[0]).id)
       }}>
-        {references.map(ref => <option key={ref}>{ref}</option>)}
+        {[...new Set(references.map(referenceBody))].map(body => <optgroup key={body} label={body}>
+          {references.filter(ref => referenceBody(ref) === body).map(ref => <option key={ref} value={ref}>{ref.slice(body.length + 3)}</option>)}
+        </optgroup>)}
       </select>
       <fieldset className="variable-picker">
         <legend>3. ¿Qué quieres comparar?</legend>
@@ -693,12 +712,10 @@ function ConsoleReadouts({ site, choice, analysis, data, error }: {
         <span className="console-label">{metric.label}</span><strong>{number(metric.value)} {data.unit}</strong>
         <i className="console-metric-line" aria-hidden="true" />
       </div>)}
-      {site && <div className="console-minimap">
+      {site && <div className="console-minimap console-place">
         <span className="console-label">Ubicación</span>
-        <div className="console-map-preview" aria-hidden="true">
-          <i style={{ left: (site.lon + 180) / 360 * 100 + '%', top: (90 - site.lat) / 180 * 100 + '%' }} />
-        </div>
-        <small>{coordinates(site)}</small>
+        <strong>{placeText(site)}</strong>
+        <small>{coordinates(site)}{site.location && ' · ' + site.location.source}</small>
       </div>}
     </div>
     <div className="console-chart">
@@ -751,7 +768,13 @@ function App() {
   const pending = useRef<AbortController | null>(null)
   const map = useRef<HTMLDivElement>(null)
   const [showIntro, setShowIntro] = useState(!reduced)
+  const [bodyFilter, setBodyFilter] = useState<'todos' | Body>('todos')
   const choice = choices.find(c => c.id === choiceId)
+  const visibleSites = sites.filter(entry => !entry.id.startsWith('T~') || bodyFilter === 'todos' || !!entry.zone?.bodies?.includes(bodyFilter))
+  const hasMars = sites.some(entry => entry.zone?.bodies?.includes('marte'))
+  // Panels take the colour of the body being compared: lunar grey, or reddish only for Mars.
+  const activeBody: Body | undefined = choice ? (referenceBody(choice.reference) === 'Marte' ? 'marte' : 'luna')
+    : site?.zone?.bodies?.length === 1 ? site.zone.bodies[0] : undefined
 
   useEffect(() => {
     const controller = new AbortController()
@@ -774,7 +797,11 @@ function App() {
     options.then(values => {
       if (controller.signal.aborted) return
       setChoices(values)
-      setChoiceId(values[0]?.id ?? '')
+      // A candidate opens with the reference it was found against, or at least with that body.
+      const bodies = site.zone?.bodies ?? []
+      const preferred = bodies.length === 1 ? bodyName[bodies[0]] : undefined
+      const matched = values.find(c => site.zone?.references.some(name => c.reference === `${referenceBody(c.reference)} · ${name}`))
+      setChoiceId((matched ?? values.find(c => referenceBody(c.reference) === preferred) ?? values[0])?.id ?? '')
     }).catch(e => {
       if (!controller.signal.aborted) setChoiceError(e.message)
     }).finally(() => {
@@ -833,9 +860,9 @@ function App() {
 
   const data = analysis?.status === 'completed' ? analysis.result : undefined
   return <>
-    <main>
+    <main data-body={activeBody}>
       <section className={showIntro ? 'explore stars opening' : 'explore stars'} id="explorar">
-        <Globe sites={sites} selected={site} onSelect={pick} opening={showIntro} onReady={() => setShowIntro(false)} />
+        <Globe sites={visibleSites} selected={site} onSelect={pick} opening={showIntro} onReady={() => setShowIntro(false)} />
         {!showIntro && <div className="console-frame" aria-hidden="true" />}
         <div className="map-stage" ref={map} role="region" aria-label="Ubicación en el globo">
           {!showIntro && <>
@@ -845,7 +872,8 @@ function App() {
               <p>{site ? coordinates(site) : 'Arrastra para girar · selecciona un punto para acercarte'}</p>
             </div>
             <div className="map-legend" aria-label="Leyenda del mapa">
-              <span><i className="earth-swatch" aria-hidden="true" /> Lugar del catálogo</span>
+              <span><i className="earth-swatch" aria-hidden="true" /> Registrado o candidato lunar</span>
+              <span><i className="mars-swatch" aria-hidden="true" /> Candidato marciano</span>
               <span><i className="selected-swatch" aria-hidden="true" /> Tu selección</span>
               <small>Detalle satelital progresivo al acercarse.</small>
             </div>
@@ -862,6 +890,13 @@ function App() {
             {loadingCatalog && <p role="status">Cargando lugares…</p>}
             {catalogError && <div role="alert"><p>{catalogError}</p><button className="console-retry" onClick={() => setCatalogAttempt(n => n + 1)}>Reintentar catálogo</button></div>}
             {!loadingCatalog && !sites.length && !catalogError && <p>No hay lugares disponibles todavía.</p>}
+            {hasMars && <fieldset className="body-filter">
+              <legend>Candidatos frente a</legend>
+              {(['todos', 'luna', 'marte'] as const).map(value => <label key={value}>
+                <input type="radio" name="body-filter" value={value} checked={bodyFilter === value} onChange={() => setBodyFilter(value)} />
+                <span>{value === 'todos' ? 'Luna y Marte' : bodyName[value]}</span>
+              </label>)}
+            </fieldset>}
             <div className="site-list" aria-label="Catálogo de sitios">
               {[
                 { name: 'Sitios registrados', kind: 'site' },
@@ -869,16 +904,23 @@ function App() {
                 { name: 'Candidatos aislados', kind: 'single' }
               ].map(group => {
                 const kind = (entry: Site) => !entry.id.startsWith('T~') ? 'site' : entry.zone?.isZone ? 'zone' : 'single'
-                const entries = sites.filter(entry => kind(entry) === group.kind)
+                const entries = visibleSites.filter(entry => kind(entry) === group.kind)
                 return entries.length > 0 && <div className="site-group" key={group.name}>
                   <h3>{group.name} <span>({entries.length})</span></h3>
-                  {entries.map(entry => <button className="site-button" key={entry.id} aria-pressed={site?.id === entry.id} onClick={() => pick(entry)}><span>{siteName(entry)}</span><span aria-hidden="true">↗</span></button>)}
+                  {entries.map(entry => <button className="site-button" key={entry.id} aria-pressed={site?.id === entry.id} onClick={() => pick(entry)}>
+                    <span>{siteName(entry)}</span>
+                    <span className="site-tags">
+                      {entry.zone?.bodies?.map(body => <span className={'body-tag ' + body} key={body}>{bodyName[body]}</span>)}
+                      <span aria-hidden="true">↗</span>
+                    </span>
+                  </button>)}
                 </div>
               })}
             </div>
             {site && <div className="site-detail">
               <h3>{siteName(site)}</h3>
               <p className="coordinates">{coordinates(site)}</p>
+              <p className="place">{placeText(site)}</p>
               <p>{site.coverage}</p>
               <a href="#comparacion" className="compare-link">Comparar este lugar ↓</a>
             </div>}
@@ -886,6 +928,7 @@ function App() {
               analysis={analysis} onCompare={analyze} onChoice={selectComparison} onRetryChoices={() => setChoiceAttempt(n => n + 1)} />
             <details className="catalog-legend"><summary>¿Qué significa «candidato»?</summary>
               <p>«3/3» indica que las tres medidas de relieve están dentro del rango de la referencia, no un 100 % de similitud. Es una preselección para investigar, no un análogo confirmado ni un sitio aprobado por NASA.</p>
+              <p>Frente a la Luna, el rango es el 80 % central de la región de referencia (P10–P90). Frente a Marte se usa el 50 % central (P25–P75): con el rango amplio, las regiones marcianas coincidían con gran parte de los desiertos. Jezero y el aterrizaje de Curiosity solo sirven para comparar, no para buscar candidatos.</p>
               <p>Una zona agrupa teselas candidatas de 3 km cuyos centros están a pocos kilómetros entre sí. Se muestra su mejor tesela; el área suma las teselas que cumplen, no todo el entorno.</p>
               <p>Los sitios registrados también incluyen referencias y controles; estar en la lista no implica validación.</p>
             </details>
