@@ -348,3 +348,7 @@ select { max-width: 100%; width: 100%; padding: 10px; border: 1px solid #ffffff5
 .atlas-brand-row { display: flex; align-items: center; gap: 16px; margin: 4px 0 8px; flex-shrink: 0; }
 .atlas-brand-row .atlas-brand { margin: 0; width: min(128px, 65%); }
 .atlas-companion-brand { display: block; width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; transform: translateY(-3px); }
+
+.globe-actions .language-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; font-size: .75rem; white-space: nowrap; }
+.language-toggle .current-language { color: #fff; font-weight: 700; }
+.language-toggle span:not(.current-language) { color: #b9c8de; }
